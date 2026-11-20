@@ -1,0 +1,13 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+legacy-src-*.tar.gz
+demo/
+dist/
+
+# Your own streaming-service logos (netflix.png, disney.svg, …): used by your builds, never committed.
+app/src/main/assets/icons/
