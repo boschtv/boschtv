@@ -31,8 +31,8 @@ New versions are offered by the app itself (Instellingen → Controleren op upda
   `┃NL┃`, `[DE]`, `FR:`, `Movies | EN`, "Dutch Movies", "Turkse series".
 - **Home, Films, Series, Kids** with rows ordered by your taste, the time of day and the season; Top 10
   and "new and popular" per streaming service from TMDB.
-- **Streaming services.** Pick Netflix, Prime Video, Disney+ and others from the logo top left; the
-  whole app then shows only that service.
+- **Streaming services.** Pick a streaming service from the logo top left; the whole app then shows
+  only that service's titles.
 - **Genres** with combinable filters for kind, year and sort order.
 - **Player.** Resume, next episode with countdown, subtitles and audio tracks, fast skipping.
 - **Live TV.** Last channel on start, up/down zapping, number keys, channel lists, favourites, a
@@ -46,13 +46,10 @@ The app's own texts are Dutch for now; see the roadmap.
 ### Your own service logos
 
 The streaming-service logos come from TMDB. To use your own instead (for example for a service TMDB
-does not have), put an image named after the service in `app/src/main/assets/icons/` before building:
-`netflix.png`, `disney.svg`, `streamz.webp`. Square images (about 256×256) look best; PNG, WebP, JPG
-and SVG all work. The names are the lower-case service names from `Service` in
-`app/src/main/java/nl/boschtv/tv/core/Taxonomy.kt` (`netflix`, `prime`, `disney`, `videoland`, `hbo`,
-`apple`, `skyshowtime`, `viaplay`, `npo`, `nlziet`, `paramount`, `discovery`, `pathe`, `hulu`, `peacock`,
-`streamz`, `vtm`, `vrt`, `bbc`, `canal`, `kijk`, `mgm`, `crunchyroll`, `natgeo`). The folder is ignored
-by git, so your files stay yours.
+does not have), put a square image (about 256×256; PNG, WebP, JPG or SVG) in
+`app/src/main/assets/icons/` before building, named after the service in lower case as it appears in
+`Service` in `app/src/main/java/nl/boschtv/tv/core/Taxonomy.kt`. The folder is ignored by git, so your
+files stay yours.
 
 ## Working on it
 
