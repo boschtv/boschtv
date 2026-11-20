@@ -20,13 +20,13 @@ On a Google TV, without a computer:
    (Without the code: `https://github.com/florisbosch/boschtv/releases/latest/download/boschtv.apk`)
 5. Open BoschTV and log in, on the TV or by scanning the QR code with your phone.
 
-New versions are offered by the app itself (Instellingen → Controleren op updates).
+New versions are offered by the app itself (Settings → Check for updates).
 
 ## What it does
 
 - **One catalog.** The same film listed in ten categories, three languages and four qualities becomes
   one title, in your language when it exists, with the other versions selectable.
-- **Your language.** Choose it in Instellingen (new installs start in the TV's own language). English
+- **Your language.** Choose it in Settings (new installs start in the TV's own language). English
   is the fallback; every other language is left out. Works with the usual ways providers label things:
   `┃NL┃`, `[DE]`, `FR:`, `Movies | EN`, "Dutch Movies", "Turkse series".
 - **Home, Films, Series, Kids** with rows ordered by your taste, the time of day and the season; Top 10

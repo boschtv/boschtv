@@ -35,7 +35,7 @@ works, minus what the setting is for.
 
 | Key | What it does | Without it |
 | --- | --- | --- |
-| `tmdb.token` | TMDB read-access token (free at themoviedb.org → Settings → API) | No Top 10, trending or TMDB recommendations; "Meer zoals dit" uses the app's own picks |
+| `tmdb.token` | TMDB read-access token (free at themoviedb.org → Settings → API) | No Top 10, trending or TMDB recommendations; "More like this" uses the app's own picks |
 | `update.url` | Where installed copies look for new versions (`…/releases/latest/download/update.json`) | No update checks |
 | `signing.store`, `signing.password`, `signing.alias` | Release signing key | Your machine's debug key |
 
@@ -137,7 +137,7 @@ Add a line to `followsHomeLanguage` in `CoreTest.kt`.
 Official builds come from this repository's releases:
 
 ```bash
-tools/release.sh 2.4.0 "Wat er nieuw is (shown in the app)"
+tools/release.sh 2.4.0 "What's new (shown in the app)"
 ```
 
 This raises `versionCode` in `version.properties`, builds and tests, and publishes `boschtv.apk` and

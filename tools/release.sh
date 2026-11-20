@@ -53,4 +53,4 @@ echo "dist/ ready: boschtv.apk ($(du -h dist/boschtv.apk | cut -f1)), update.jso
 
 if [ "$DRY" = "--dry-run" ]; then echo "Dry run: nothing published."; exit 0; fi
 gh release create "v$NAME" dist/boschtv.apk dist/update.json --repo "$REPO" --title "BoschTV $NAME" --notes "${NOTES:-BoschTV $NAME}"
-echo "Published. Installed copies offer $NAME within a few hours, or right away via Instellingen > Controleren op updates."
+echo "Published. Installed copies offer $NAME within a few hours, or right away via Settings > Check for updates."

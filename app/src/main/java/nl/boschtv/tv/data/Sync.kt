@@ -90,14 +90,16 @@ class SyncManager(
     }
 
     /**
-     * The provider sometimes answers with a stripped list (no posters, no TMDB ids), seen when the line
-     * was busy elsewhere. Storing that would blank the artwork and duplicate titles, so the update is
-     * dropped and the catalog we have stays as it is. Normally well under 1% lacks a poster.
+     * A provider sometimes answers with a stripped list (no posters, no TMDB ids), seen when the line was
+     * busy elsewhere. Storing that would blank the artwork and duplicate titles, so the update is dropped
+     * and the catalog we have stays. Judged against the catalog already stored, not a fixed limit: a
+     * provider that always lacks many posters keeps working; only a sudden jump is refused.
      */
-    private fun complete(items: Collection<Candidate>) {
+    private suspend fun complete(items: Collection<Candidate>, kind: Int) {
         if (items.size < 500) return
-        val bare = items.count { it.poster.isNullOrBlank() }
-        if (bare * 10 > items.size) throw IllegalStateException("De aanbieder gaf een onvolledige lijst; later opnieuw.")
+        val before = db.catalog().missingPosterPercent(kind) ?: return   // first sync: nothing to compare with
+        val now = items.count { it.poster.isNullOrBlank() } * 100 / items.size
+        if (now > before + 25) throw IllegalStateException("De aanbieder gaf een onvolledige lijst; later opnieuw.")
     }
 
     private fun step(p: Float, msg: String) { state.value = SyncState.Running(p, msg) }
@@ -122,13 +124,13 @@ class SyncManager(
 
         step(0.12f, "Films ophalen…")
         val movies = collect(src, "get_vod_streams", KIND_MOVIE, vodInfo, content)
-        complete(movies)
+        complete(movies, KIND_MOVIE)
         step(0.5f, "Films opslaan…")
         store(movies, gen)
 
         step(0.55f, "Series ophalen…")
         val series = collect(src, "get_series", KIND_SERIES, seriesInfo, content)
-        complete(series)
+        complete(series, KIND_SERIES)
         step(0.82f, "Series opslaan…")
         store(series, gen)
 

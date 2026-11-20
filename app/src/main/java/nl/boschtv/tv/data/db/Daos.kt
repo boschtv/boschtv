@@ -22,6 +22,9 @@ interface CatalogDao {
     @Query("UPDATE titles SET genres = pGenres | dGenres") suspend fun refreshGenres()
     @Query("SELECT COUNT(*) FROM titles") suspend fun titleCount(): Int
     @Query("SELECT COUNT(DISTINCT gen) FROM titles") suspend fun generations(): Int
+    /** Share of stored titles of [kind] without a poster, in percent; null when there are none yet. */
+    @Query("SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE SUM(CASE WHEN poster IS NULL OR poster = '' THEN 1 ELSE 0 END) * 100 / COUNT(*) END FROM titles WHERE kind = :kind")
+    suspend fun missingPosterPercent(kind: Int): Int?
 
     @RawQuery suspend fun rows(query: SupportSQLiteQuery): List<TitleRow>
     @RawQuery suspend fun count(query: SupportSQLiteQuery): Int
