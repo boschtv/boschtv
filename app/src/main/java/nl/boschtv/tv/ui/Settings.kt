@@ -2,6 +2,8 @@
 
 package nl.boschtv.tv.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import nl.boschtv.tv.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
@@ -62,7 +64,8 @@ fun SettingsScreen(focus: FocusRequester) {
 
     // Two columns instead of one long list: everything fits on one screen, nothing scrolls under the top bar.
     Row(Modifier.fillMaxSize().padding(start = EDGE, end = EDGE, top = 88.dp), horizontalArrangement = Arrangement.spacedBy(56.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Both columns scroll along with the remote once they are taller than the screen.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.settings), style = MaterialTheme.typography.headlineLarge, color = Ink.Text)
 
             Heading(stringResource(R.string.subscription))
@@ -90,7 +93,7 @@ fun SettingsScreen(focus: FocusRequester) {
             Info(stringResource(R.string.continue_watching), homeRow)
             Text(stringResource(R.string.gtv_note), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
         }
-        Column(Modifier.weight(1f).padding(top = 44.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 44.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Heading(stringResource(R.string.what_to_see))
             // Your language: kept, with English as fallback; every other language is left out.
             var choosing by remember { mutableStateOf(false) }
@@ -113,6 +116,11 @@ fun SettingsScreen(focus: FocusRequester) {
             if (content.home == nl.boschtv.tv.core.Language.DUTCH) {
                 Toggle(stringResource(R.string.flemish), "", content.belgian) { setContent(content.copy(belgian = !content.belgian)) }
             }
+
+            Heading(stringResource(R.string.previews))
+            val previews by c.prefs.previews.collectAsState(true to true)
+            Toggle(stringResource(R.string.previews_on), "", previews.first) { scope.launch { c.prefs.setPreviews(!previews.first, previews.second) } }
+            if (previews.first) Toggle(stringResource(R.string.previews_sound), "", previews.second) { scope.launch { c.prefs.setPreviews(true, !previews.second) } }
 
             Heading(stringResource(R.string.data))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

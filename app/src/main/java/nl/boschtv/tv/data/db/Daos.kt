@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 
 const val ROW_COLUMNS =
     "`key`, kind, name, year, poster, COALESCE(dBackdrop, pBackdrop) AS backdrop, rating, genres, services, " +
-        "flags, lang, addedTs, substr(COALESCE(dPlot, pPlot), 1, 360) AS plot"
+        "flags, lang, addedTs, substr(COALESCE(lPlot, dPlot, pPlot), 1, 360) AS plot"
 
 data class EnrichTarget(val key: String, val sourceId: Long)
 
@@ -22,6 +22,8 @@ interface CatalogDao {
     @Query("UPDATE titles SET genres = pGenres | dGenres") suspend fun refreshGenres()
     @Query("SELECT COUNT(*) FROM titles") suspend fun titleCount(): Int
     @Query("SELECT COUNT(DISTINCT gen) FROM titles") suspend fun generations(): Int
+    @Query("UPDATE titles SET lPlot = :plot, lPlotLocale = :locale WHERE `key` = :key")
+    suspend fun setLocalPlot(key: String, plot: String?, locale: String)
     /** Share of stored titles of [kind] without a poster, in percent; null when there are none yet. */
     @Query("SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE SUM(CASE WHEN poster IS NULL OR poster = '' THEN 1 ELSE 0 END) * 100 / COUNT(*) END FROM titles WHERE kind = :kind")
     suspend fun missingPosterPercent(kind: Int): Int?

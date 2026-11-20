@@ -79,7 +79,8 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
             modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.66f).fillMaxHeight(0.62f)) { url ->
             if (url != null) AsyncImage(url, null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize())
         }
-        if (preview) Preview(card, Modifier.align(Alignment.TopEnd).fillMaxWidth(0.66f).fillMaxHeight(0.62f))
+        val previews by rememberContainer().prefs.previews.collectAsState(true to true)
+        if (preview && previews.first) Preview(card, previews.second, Modifier.align(Alignment.TopEnd).fillMaxWidth(0.66f).fillMaxHeight(0.62f))
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Ink.Bg, 0.34f to Ink.Bg, 0.62f to Ink.Bg.copy(alpha = 0.35f), 1f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Ink.Bg.copy(alpha = 0.55f), 0.16f to Color.Transparent, 0.4f to Color.Transparent, 0.62f to Ink.Bg)))
 
@@ -118,6 +119,16 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
     var rows by remember(kind, service) { mutableStateOf<List<HomeRow>?>(null) }
     var focused by remember(kind, service) { mutableStateOf<Card?>(null) }
     val first = remember { FocusRequester() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Back deep inside the rows returns to the top row first, as the big streaming apps do. Focus goes
+    // to the first tile explicitly: the tile that had it scrolls out of view and would take focus along.
+    androidx.activity.compose.BackHandler(enabled = active && listState.firstVisibleItemIndex > 0) {
+        scope.launch {
+            listState.scrollToItem(0)
+            delay(60)
+            runCatching { first.requestFocus() }
+        }
+    }
     // Where to land when focus comes back into the rows (from the top bar, a detail page, the player):
     // the tile you were on if it is still there, otherwise the first one.
     val restore = remember { FocusRequester() }
@@ -146,6 +157,7 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
                         target.startsWith(r.id + "/") && (r.cards.any { "${r.id}/${it.key}" == target } || r.services.any { "${r.id}/${it.name}" == target })
                     }
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize().focusRequester(focus)
                             .focusProperties { enter = { if (stillThere) restore else first } }.focusGroup(),
                         contentPadding = PaddingValues(bottom = railsHeight - 60.dp),
@@ -192,7 +204,7 @@ fun Splash(modifier: Modifier = Modifier) {
  * exactly where they are. Stops as soon as you move on, open something, or leave the screen.
  */
 @Composable
-private fun Preview(card: Card?, modifier: Modifier) {
+private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
     val c = rememberContainer()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var url by remember { mutableStateOf<String?>(null) }
@@ -213,7 +225,7 @@ private fun Preview(card: Card?, modifier: Modifier) {
     var showing by remember(stream) { mutableStateOf(false) }
     val player = remember(stream) {
         nl.boschtv.tv.player.Playback.player(ctx, live = false).apply {
-            volume = 0.5f   // previews play with sound, at half volume
+            volume = if (sound) 0.5f else 0f   // half volume, or silent when switched off in Settings
             trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true).build()
             setMediaItem(nl.boschtv.tv.player.Playback.item(stream), 240_000L)   // skip logos and opening titles
             prepare(); playWhenReady = true

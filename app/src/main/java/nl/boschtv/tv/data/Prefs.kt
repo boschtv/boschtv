@@ -37,6 +37,9 @@ class Prefs(private val context: Context) {
         val PROBLEM = stringPreferencesKey("problem")
         val SYNC_REPORT = stringPreferencesKey("sync_report")
         val HOME_LANGUAGE = stringPreferencesKey("home_language")
+        val SERVER_ZONE = stringPreferencesKey("server_zone")
+        val PREVIEWS = booleanPreferencesKey("previews")
+        val PREVIEW_SOUND = booleanPreferencesKey("preview_sound")
         val SERVICE_LOGOS = stringPreferencesKey("service_logos")
     }
 
@@ -61,6 +64,14 @@ class Prefs(private val context: Context) {
     suspend fun serviceLogos(): String? = context.store.data.first()[K.SERVICE_LOGOS]
     suspend fun saveServiceLogos(text: String) = context.store.edit { it[K.SERVICE_LOGOS] = text }
 
+    /** Hover previews on the home screens: whether they play, and whether with sound. Both on by default. */
+    val previews: Flow<Pair<Boolean, Boolean>> = context.store.data
+        .map { (it[K.PREVIEWS] ?: true) to (it[K.PREVIEW_SOUND] ?: true) }.distinctUntilChanged()
+    suspend fun setPreviews(on: Boolean, sound: Boolean) = context.store.edit { it[K.PREVIEWS] = on; it[K.PREVIEW_SOUND] = sound }
+
+    /** The provider server's time zone for catch-up addresses; null when the provider does not say. */
+    suspend fun serverZone(): String? = context.store.data.first()[K.SERVER_ZONE]
+
     suspend fun source(): Source = source.first()
     suspend fun content(): ContentPrefs = content.first()
     suspend fun lastSync(): Long = lastSync.first()
@@ -78,6 +89,7 @@ class Prefs(private val context: Context) {
         it[K.TRIAL] = a.trial
         it[K.LIVE_EXT] = if ("m3u8" in a.formats || a.formats.isEmpty()) "m3u8" else "ts"
         if (a.active) it.remove(K.PROBLEM) else it[K.PROBLEM] = a.message
+        if (a.timezone != null) it[K.SERVER_ZONE] = a.timezone else it.remove(K.SERVER_ZONE)
     }
 
     suspend fun setProblem(message: String?) = context.store.edit {

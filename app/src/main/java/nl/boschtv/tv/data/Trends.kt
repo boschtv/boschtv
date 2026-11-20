@@ -157,6 +157,31 @@ class Trends(private val db: AppDatabase, private val http: OkHttpClient, privat
         db.withTransaction { db.trends().clear(listId); db.trends().insert(rows) }
     }
 
+    /**
+     * Stores the title's description in the viewer's language from TMDB (when that is not English and
+     * TMDB has a translation). Returns true when a description was stored. Remembers the language
+     * asked, also when TMDB has none, so a title is looked up once per language.
+     */
+    suspend fun localizePlot(key: String): Boolean = withContext(Dispatchers.IO) {
+        if (!enabled) return@withContext false
+        val home = prefs.content().home
+        if (home == nl.boschtv.tv.core.Language.ENGLISH) return@withContext false
+        val m = tmdbKey.find(key) ?: return@withContext false
+        val type = if (m.groupValues[1] == "m") "movie" else "tv"
+        val text = runCatching { item("$type/${m.groupValues[2]}?language=${home.locale}")?.str("overview") }.getOrNull()?.takeIf { it.isNotBlank() }
+        db.catalog().setLocalPlot(key, text, home.locale)
+        text != null
+    }
+
+    private fun item(path: String): JsonObj? {
+        val req = Request.Builder().url("https://api.themoviedb.org/3/$path")
+            .header("Authorization", "Bearer $token").header("accept", "application/json").build()
+        http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) error("TMDB ${resp.code}")
+            return JsonReader.of(resp.body!!.source()).readJsonValue().asObj()
+        }
+    }
+
     private fun results(path: String): List<JsonObj> {
         val req = Request.Builder().url("https://api.themoviedb.org/3/$path")
             .header("Authorization", "Bearer $token").header("accept", "application/json").build()

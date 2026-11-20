@@ -266,4 +266,7 @@
     <plurals name="n_seasons"><item quantity="one">%d seizoen</item><item quantity="other">%d seizoenen</item></plurals>
     <plurals name="n_screens"><item quantity="one">%d scherm</item><item quantity="other">%d schermen</item></plurals>
     <plurals name="n_titles"><item quantity="one">%d titel</item><item quantity="other">%d titels</item></plurals>
+    <string name="previews">Previews</string>
+    <string name="previews_on">Preview afspelen als je op een titel blijft staan</string>
+    <string name="previews_sound">Previews met geluid</string>
 </resources>

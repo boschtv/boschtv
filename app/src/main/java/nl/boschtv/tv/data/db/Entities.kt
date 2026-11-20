@@ -44,6 +44,9 @@ data class TitleEntity(
     @ColumnInfo(defaultValue = "0") val genres: Long = 0,
     @ColumnInfo(defaultValue = "0") val dGenres: Long = 0,
     val dPlot: String? = null,
+    // ---- the description in the viewer's language from TMDB, and which language that is ----
+    val lPlot: String? = null,
+    val lPlotLocale: String? = null,
     val dBackdrop: String? = null,
     @ColumnInfo(defaultValue = "0") val durationSecs: Long = 0,
     val actors: String? = null,
