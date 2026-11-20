@@ -382,9 +382,10 @@ class LiveActivity : ComponentActivity() {
                     modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(Ink.Bg.copy(alpha = 0.85f)).padding(24.dp))
             }
             if (ui.digits.isNotEmpty()) Text(ui.digits, style = MaterialTheme.typography.displayLarge, color = Ink.Text,
-                modifier = Modifier.align(Alignment.TopEnd).padding(40.dp).clip(RoundedCornerShape(16.dp)).background(Ink.Bg.copy(alpha = 0.85f)).padding(horizontal = 24.dp, vertical = 8.dp))
+                modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp).clip(RoundedCornerShape(16.dp)).background(Ink.Bg.copy(alpha = 0.85f)).padding(horizontal = 24.dp, vertical = 8.dp))
 
-            AnimatedVisibility(ui.banner && !ui.guide && !ui.timeline, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
+            // At the top: channels put their own subtitles at the bottom, and the banner must not cover them.
+            AnimatedVisibility(ui.banner && !ui.guide && !ui.timeline, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
                 ui.current?.let { Banner(it, numberOf(it), ui.programmes, ui.replay) }
             }
             AnimatedVisibility(ui.guide, enter = slideInHorizontally { -it / 3 } + fadeIn(), exit = slideOutHorizontally { -it / 3 } + fadeOut()) {
@@ -399,7 +400,7 @@ class LiveActivity : ComponentActivity() {
 
 @Composable
 private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEntity>, replay: ProgrammeEntity? = null) {
-    Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF00A0A24)))).padding(start = 48.dp, end = 48.dp, top = 60.dp, bottom = 36.dp)) {
+    Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xF00A0A24), Color.Transparent))).padding(start = 48.dp, end = 48.dp, top = 32.dp, bottom = 64.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Text(if (number > 0) "$number" else "", style = MaterialTheme.typography.displayLarge, color = Ink.AccentSoft)
             if (!ch.logo.isNullOrBlank()) AsyncImage(ch.logo, null, contentScale = ContentScale.Fit, modifier = Modifier.size(72.dp, 48.dp))
