@@ -45,6 +45,10 @@ class CoreTest {
         Categories.classify("┃NL┃ DRAMA ┃ ROMANTIEK", false, prefs).let { assertEquals(Genre.DRAMA.bit or Genre.ROMANCE.bit, it.genres) }
         Categories.classify("┃EN┃ THRILLER┃MYSTERY", false, prefs).let { assertEquals(Lang.EN, it.lang); assertEquals(Genre.THRILLER.bit or Genre.MYSTERY.bit, it.genres) }
         assertTrue(Categories.classify("┃NL┃ BIOSCOOP", false, prefs).flags and Flags.CINEMA != 0)
+        // Other providers' words for "now in cinemas".
+        for (n in listOf("┃EN┃ CINEMA", "EN: In Theaters", "┃DE┃ KINO", "┃FR┃ CINÉ", "[EN] Box Office", "NL | Nu in de bioscoop"))
+            assertTrue(n, Categories.flagsOf(n) and Flags.CINEMA != 0)
+        assertEquals(0, Categories.flagsOf("┃EN┃ CINEMATIC UNIVERSE") and Flags.CINEMA)
         assertEquals(0, Categories.classify("┃EN┃ NEW RELEASED", false, prefs).flags and Flags.CINEMA)
         assertTrue(Categories.classify("┃NL┃ KERSTFILMS", false, prefs).flags and Flags.CHRISTMAS != 0)
         assertTrue(Categories.classify("┃NL┃ SINTERKLAAS", false, prefs).genres and Genre.KIDS.bit != 0L)
@@ -121,6 +125,22 @@ class CoreTest {
         Categories.classify("Netflix Series", false, prefs, profile).let { assertEquals(Lang.HOME, it.lang); assertFalse(it.labelled); assertEquals(Service.NETFLIX.bit, it.services) }
         // The usual "┃NL┃ …" provider is recognised as labelling.
         assertTrue(ProviderProfile.of(listOf("┃NL┃ FILMS", "┃EN┃ DRAMA", "┃DE┃ KINO", "TOP 100")).labelsLanguages)
+    }
+
+    /** Genre and list words in the languages a viewer can choose. */
+    @Test fun readsGenresInOtherLanguages() {
+        assertEquals(Genre.COMEDY.bit, Genre.mask("KOMÖDIE"))
+        assertEquals(Genre.CRIME.bit, Genre.mask("Krimi"))
+        assertEquals(Genre.COMEDY.bit, Genre.mask("Comédie"))
+        assertEquals(Genre.HORROR.bit, Genre.mask("Épouvante"))
+        assertEquals(Genre.ANIMATION.bit, Genre.mask("Animación"))
+        assertEquals(Genre.SCIFI.bit, Genre.mask("Bilim Kurgu"))
+        assertTrue(Genre.mask("Enfants") and Genre.KIDS.bit != 0L)
+        assertEquals(0L, Genre.mask("Warner Bros"))   // "war" only as a whole word
+        assertTrue(Categories.flagsOf("┃DE┃ WEIHNACHTSFILME") and Flags.CHRISTMAS != 0)
+        assertTrue(Categories.flagsOf("┃FR┃ NOËL") and Flags.CHRISTMAS != 0)
+        assertTrue(Categories.flagsOf("EN: Trending Now") and Flags.TOP != 0)
+        assertTrue(Categories.flagsOf("┃NL┃ TOP 100") and Flags.TOP != 0)
     }
 
     @Test fun parsesPastedLinks() {

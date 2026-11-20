@@ -1,29 +1,34 @@
 package nl.boschtv.tv.core
 
 /** Real genres. Provider categories are only ever used as a signal to derive these. */
+/**
+ * Real genres. Provider categories are only ever used as a signal to derive these. Each pattern holds
+ * the word in the languages a viewer can choose (Dutch, English, German, French, Spanish, Italian,
+ * Portuguese, Polish, Turkish, Arabic transliterations aside), so any provider's naming is understood.
+ */
 enum class Genre(val label: String, pattern: String) {
-    ACTION("Actie", """\b(acti(e|on))\b"""),
-    ADVENTURE("Avontuur", """\b(adventure|avontuur)"""),
-    COMEDY("Komedie", """\b(comedy|komedie|comedie|cabaret|humor)"""),
-    DRAMA("Drama", """\b(drama|soap)"""),
-    THRILLER("Thriller", """\bthriller"""),
-    CRIME("Misdaad", """\b(crime|misdaad|krimi)"""),
-    ROMANCE("Romantiek", """\broman(ce|tiek|tisch|tic)"""),
-    SCIFI("Sciencefiction", """\b(sci[- ]?fi|science[- ]?fiction)"""),
-    FANTASY("Fantasy", """\bfantas(y|ie)"""),
-    HORROR("Horror", """\b(horror|griezel)"""),
-    MYSTERY("Mysterie", """\bmyster"""),
-    FAMILY("Familie", """\bfamil(y|ie)\b"""),
-    KIDS("Kids", """\b(kids?|kinderen|kinder|jeugd|baby|peuter|k3|nick\w*|cartoon|sinterklaas)\b"""),
-    ANIMATION("Animatie", """\b(animati(e|on)|cartoon|tekenfilm)"""),
+    ACTION("Actie", """\b(acti(e|on)|acci[oó]n|azione|a[cç][aã]o|akcj[ai]|aksiyon)\b"""),
+    ADVENTURE("Avontuur", """\b(adventure|avontuur|abenteuer|aventur\w*|avventur\w*|przygod\w*|macera)"""),
+    COMEDY("Komedie", """\b(comed(y|ie|ia)|kom[eö]di[ea]?|com[eé]die|commedia|cabaret|humor|komedia)"""),
+    DRAMA("Drama", """\b(drama|dramma|drame|dram|soap)"""),
+    THRILLER("Thriller", """\b(thriller|gerilim)"""),
+    CRIME("Misdaad", """\b(crime|misdaad|krimi\w*|policier|crimen|policial|poliziesco|krymina\w*|su[cç])\b"""),
+    ROMANCE("Romantiek", """\b(roman(ce|tiek|tisch|tic|tik|tique|tico|tica|tyczn\w*)|romant)"""),
+    SCIFI("Sciencefiction", """\b(sci[- ]?fi|science[- ]?fiction|ciencia ficci[oó]n|fantascienza|fic[cç][aã]o cient\w*|bilim kurgu)"""),
+    FANTASY("Fantasy", """\bfantas(y|ie|[ií]a|tique|tico|tyka)"""),
+    HORROR("Horror", """\b(horror|griezel|grusel|[eé]pouvante|terror|korku)"""),
+    MYSTERY("Mysterie", """\b(myster|misterio|mistero|mist[eé]rio|gizem)"""),
+    FAMILY("Familie", """\b(famil(y|ie|ia|le)|aile)\b"""),
+    KIDS("Kids", """\b(kids?|kinderen|kinder|jeugd|baby|peuter|k3|nick\w*|cartoon|sinterklaas|enfants?|jeunesse|ni[nñ]os|infantil|bambini|dzieci|[cç]ocuk)\b"""),
+    ANIMATION("Animatie", """\b(animati(e|on)|animaci[oó]n|anima[cç][aã]o|animazione|animacj[ai]|animasyon|cartoon|tekenfilm|trickfilm|dessins? anim[eé]s?)"""),
     ANIME("Anime", """\banime\b"""),
-    DOCUMENTARY("Documentaire", """\b(docu\w*|national geographic)"""),
-    HISTORY("Historisch", """\b(histor\w+|geschiedenis)"""),
-    WAR("Oorlog", """\b(war|oorlog)\b"""),
+    DOCUMENTARY("Documentaire", """\b(docu\w*|dokument\w*|belgesel|national geographic)"""),
+    HISTORY("Historisch", """\b(histor\w+|geschiedenis|geschicht\w*|storic\w*|tarih\w*)"""),
+    WAR("Oorlog", """\b(war|oorlog|krieg\w*|guerre|guerra|wojn\w*|wojenn\w*|sava[sş])\b"""),
     WESTERN("Western", """\bwestern"""),
-    MUSIC("Muziek", """\b(musi[ck]\w*|muziek|concert\w*|festivals?)"""),
+    MUSIC("Muziek", """\b(musi[ck]\w*|muziek|musique|m[uú]sica|muzyk\w*|m[uü]zik|concert\w*|konzert\w*|festivals?)"""),
     REALITY("Reality", """\b(reality|talk|90 day)"""),
-    SPORT("Sport", """\b(sports?|f1|mxgp|motocross|darts|nascar|ufc|wwe|glory|pfl|dazn|feyenoord|vro+m|race cafe|boks|formula1?|espn)\b""");
+    SPORT("Sport", """\b(sports?|deportes?|esportes?|f1|mxgp|motocross|darts|nascar|ufc|wwe|glory|pfl|dazn|feyenoord|vro+m|race cafe|boks|formula1?|espn|fu[sß]ball|f[uú]tbol|futebol|calcio)\b""");
 
     val bit: Long = 1L shl ordinal
     private val regex = Regex(pattern, RegexOption.IGNORE_CASE)
@@ -90,9 +95,14 @@ object Flags {
     const val CHRISTMAS = 4
     const val SINTERKLAAS = 8
 
-    private val top = Regex("""\btop ?\d{2,3}\b""", RegexOption.IGNORE_CASE)
-    private val cinema = Regex("""\b(bioscoop|in cinemas?)\b""", RegexOption.IGNORE_CASE)
-    private val christmas = Regex("""\b(kerst\w*|christmas|xmas)\b""", RegexOption.IGNORE_CASE)
+    private val top = Regex("""\b(top ?\d{2,3}|trending|populair\w*|popular\w*|beliebt\w*|tendances?|tendencias?|pi[uù] vist\w*|pop[uü]ler)\b""", RegexOption.IGNORE_CASE)
+    /**
+     * "Now in cinemas", as providers name it in different languages: bioscoop, cinema, kino, ciné,
+     * cine, en salles, in theaters, box office. Old-film collections ("Cinema Classics") also match;
+     * the cinema row only shows recent years, so those never surface there.
+     */
+    private val cinema = Regex("""\b(bioscoop\w*|cinemas?|kino|cin[eé]|cin[eé]ma|en salles|in theat(er|re)s?|box ?office)\b""", RegexOption.IGNORE_CASE)
+    private val christmas = Regex("""\b(kerst\w*|christmas|xmas|weihnacht\w*|no[eë]l|navidad\w*|natal\w*|[sś]wi[aą]t\w*|yılbaşı|yilbasi)\b""", RegexOption.IGNORE_CASE)
     private val sint = Regex("""\bsinterklaas\b""", RegexOption.IGNORE_CASE)
 
     fun of(text: String): Int {
@@ -188,6 +198,9 @@ object Categories {
             labelled = language != null,
         )
     }
+
+    /** Editorial flags of a category name, whatever its language. */
+    fun flagsOf(name: String): Int = Flags.of(Tags.strip(name))
 
     /** "NEDERLAND HD | TERUGKIJKEN ⏺" -> "Nederland HD". */
     private fun pretty(body: String): String {
