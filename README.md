@@ -6,6 +6,13 @@ one catalog with real genres, streaming-service shelves, continue watching and r
 Live TV behaves like a TV, with zapping, a channel list and a timeline guide. The provider's hundreds
 of categories are never shown; the app reads them and builds proper pages from them.
 
+![Home: Continue watching](docs/screenshots/home.jpg)
+
+| | |
+| --- | --- |
+| ![Top 10 series this week](docs/screenshots/top10.jpg) | ![A film with More like this](docs/screenshots/movie.jpg) |
+| ![A series with seasons and episodes](docs/screenshots/series.jpg) | ![The Kids tab](docs/screenshots/kids.jpg) |
+
 BoschTV contains no content and no provider. You log in with your own Xtream Codes subscription
 (server, username, password), the login nearly every IPTV provider gives out.
 
