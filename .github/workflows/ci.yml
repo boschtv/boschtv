@@ -27,8 +27,8 @@ jobs:
           distribution: temurin
           java-version: 17
       # Checks gradle-wrapper.jar against Gradle's published checksums (a pull request could swap it).
-      - uses: gradle/actions/wrapper-validation@v4
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: gradle/actions/setup-gradle@v6
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
       - name: Lint
