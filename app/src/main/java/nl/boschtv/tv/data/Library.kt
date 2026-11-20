@@ -59,7 +59,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
 
     private fun episodeRow(e: EpisodeEntity, positionMs: Long, durationMs: Long) = ProgressEntity(
         contentId = "e:${e.id}", titleKey = e.titleKey, episodeId = e.id, season = e.season, number = e.number,
-        label = "S${e.season} · A${e.number} · ${e.name}", image = e.image, streamId = null, container = e.container,
+        label = Texts.get(R.string.episode_line, e.season, e.number, e.name), image = e.image, streamId = null, container = e.container,
         positionMs = positionMs, durationMs = durationMs, finished = false, updatedAt = 0,
     )
 
