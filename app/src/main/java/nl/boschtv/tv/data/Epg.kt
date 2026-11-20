@@ -21,12 +21,10 @@ class Epg(private val db: AppDatabase, private val client: XtreamClient, private
 
     /** Programmes still running at [from] and after it (current one first when [from] is now). */
     suspend fun upcoming(channel: ChannelEntity, limit: Int = 12, from: Long = System.currentTimeMillis()): List<ProgrammeEntity> = withContext(Dispatchers.IO) {
-        // The 4K / cable / other-quality copies of a channel come without guide data: borrow it from
-        // the copy of the same channel that has it (NPO 2 4K -> NPO 2 HD).
-        if (channel.epgId.isNullOrBlank()) {
-            val twin = twinWithGuide(channel) ?: return@withContext emptyList()
-            return@withContext upcoming(twin, limit, from)
-        }
+        // The 4K / cable / other-quality copies of a channel come without a guide id: borrow the guide
+        // from the copy of the same channel that has one (NPO 2 4K -> NPO 2 HD). Without such a twin, ask
+        // for the channel's own listings anyway: some providers have them under the stream itself.
+        if (channel.epgId.isNullOrBlank()) twinWithGuide(channel)?.let { return@withContext upcoming(it, limit, from) }
         val now = System.currentTimeMillis()
         var list = db.channels().programmes(channel.id, from, limit)
         val last = fetchedAt[channel.id] ?: 0L
