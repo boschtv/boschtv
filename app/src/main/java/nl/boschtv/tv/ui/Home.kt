@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -83,9 +85,9 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
 
         if (card != null) Column(Modifier.padding(start = EDGE, top = 84.dp).fillMaxWidth(0.5f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val eyebrow = buildList {
-                if (card.isNew) add("NIEUW")
+                if (card.isNew) add(Texts.get(R.string.label_new))
                 val inCinema = card.flags and nl.boschtv.tv.core.Flags.CINEMA != 0 && (card.year ?: 0) >= java.time.Year.now().value - 1
-                if (inCinema) add("IN DE BIOSCOOP") else if (showService) Service.of(card.services).firstOrNull()?.let { add(it.label.uppercase()) }
+                if (inCinema) add(Texts.get(R.string.label_cinema)) else if (showService) Service.of(card.services).firstOrNull()?.let { add(it.label.uppercase()) }
                 add(card.kindLabel.uppercase())
             }.joinToString(" · ")
             Text(eyebrow, style = MaterialTheme.typography.labelSmall, color = Ink.AccentSoft)
@@ -96,7 +98,7 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
             MetaLine(listOfNotNull(
                 card.year?.toString(),
                 card.rating.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
-                Genre.labels(card.genres).ifBlank { null },
+                genreLine(card.genres).ifBlank { null },
                 card.label,
             ))
             card.plot?.let {
@@ -136,7 +138,7 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.52f)) {
             when {
                 list == null -> Unit   // the logo animation below covers the first load
-                list.isEmpty() -> Text("Nog niets gevonden. Vernieuw de catalogus bij Instellingen.",
+                list.isEmpty() -> Text(stringResource(R.string.nothing_yet),
                     style = MaterialTheme.typography.titleLarge, color = Ink.Muted, modifier = Modifier.padding(EDGE))
                 else -> WithPivot((ROW_TITLE_H + 8).dp) {
                     val target = lastId

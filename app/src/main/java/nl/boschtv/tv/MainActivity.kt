@@ -1,5 +1,6 @@
 package nl.boschtv.tv
 
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -87,7 +88,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { SEARCH(""), HOME("Home"), MOVIES("Films"), SERIES("Series"), GENRES("Genres"), KIDS("Kids"), MYLIST("Mijn lijst"), LIVE("Live TV"), SETTINGS("") }
+private enum class Tab(@androidx.annotation.StringRes val label: Int) { SEARCH(R.string.search), HOME(R.string.tab_home), MOVIES(R.string.tab_movies), SERIES(R.string.tab_series), GENRES(R.string.tab_genres), KIDS(R.string.tab_kids), MYLIST(R.string.tab_my_list), LIVE(R.string.tab_live), SETTINGS(R.string.settings) }
 
 /** Screens stacked on top of the current tab. */
 private sealed interface Layer {
@@ -159,7 +160,7 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
                 Tab.HOME -> HomeScreen(null, scope, nav, content, active = front)
                 Tab.MOVIES -> HomeScreen(KIND_MOVIE, scope, nav, content, active = front)
                 Tab.SERIES -> HomeScreen(KIND_SERIES, scope, nav, content, active = front)
-                Tab.GENRES -> BrowseScreen(BrowseArgs("Genres", TitleQuery(services = scope?.bit ?: 0L), filters = true), nav, content)
+                Tab.GENRES -> BrowseScreen(BrowseArgs(stringResource(R.string.tab_genres), TitleQuery(services = scope?.bit ?: 0L), filters = true), nav, content)
                 Tab.KIDS -> HomeScreen(null, scope, nav, content, kids = true, active = front)
                 Tab.MYLIST -> MyList(nav, content)
                 Tab.SEARCH -> SearchScreen(nav, content, scope)
@@ -198,14 +199,14 @@ private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, onScope: ()
     ) {
         ScopeButton(scope, onScope)
         Spacer(Modifier.width(8.dp))
-        NavItem("", selected == Tab.SEARCH, Icons.Rounded.Search, "Zoeken") { onSelect(Tab.SEARCH) }
+        NavItem("", selected == Tab.SEARCH, Icons.Rounded.Search, stringResource(R.string.search)) { onSelect(Tab.SEARCH) }
         for (t in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.GENRES, Tab.KIDS, Tab.MYLIST)) {
-            NavItem(t.label, selected == t) { onSelect(t) }
+            NavItem(stringResource(t.label), selected == t) { onSelect(t) }
         }
         Spacer(Modifier.weight(1f))
         // Live TV is a different mode, so it sits apart on the right, but it is an ordinary item.
-        NavItem(Tab.LIVE.label, false, Icons.Rounded.LiveTv) { onSelect(Tab.LIVE) }
-        NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, "Instellingen") { onSelect(Tab.SETTINGS) }
+        NavItem(stringResource(Tab.LIVE.label), false, Icons.Rounded.LiveTv) { onSelect(Tab.LIVE) }
+        NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings)) { onSelect(Tab.SETTINGS) }
     }
 }
 
@@ -226,19 +227,19 @@ private fun UpdatePrompt(state: nl.boschtv.tv.system.Updater.State, onLater: () 
             Image(painterResource(R.drawable.ic_logo), null, Modifier.size(48.dp))
             when (state) {
                 is nl.boschtv.tv.system.Updater.State.Downloading -> {
-                    Text("BoschTV ${state.versionName} wordt gedownload", style = MaterialTheme.typography.headlineSmall, color = Ink.Text)
+                    Text(stringResource(R.string.update_downloading, state.versionName), style = MaterialTheme.typography.headlineSmall, color = Ink.Text)
                     Box(Modifier.fillMaxWidth().height(6.dp).background(Ink.Line, nl.boschtv.tv.ui.PillShape)) {
                         Box(Modifier.fillMaxWidth(state.progress).height(6.dp).background(Ink.Accent, nl.boschtv.tv.ui.PillShape))
                     }
-                    Text("Daarna vraagt Android of je wilt installeren.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+                    Text(stringResource(R.string.update_then_android), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
                 }
                 is nl.boschtv.tv.system.Updater.State.Available -> {
-                    Text("BoschTV ${state.versionName} is er", style = MaterialTheme.typography.headlineSmall, color = Ink.Text)
+                    Text(stringResource(R.string.update_available, state.versionName), style = MaterialTheme.typography.headlineSmall, color = Ink.Text)
                     state.notes?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Soft, maxLines = 6) }
-                    Text("Je login, voortgang en lijst blijven bewaard.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+                    Text(stringResource(R.string.update_keeps), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Pill("Nu bijwerken", { scope.launch { c.updater.install() } }, Modifier.focusRequester(first), primary = true)
-                        Pill("Later", onLater, selected = true)
+                        Pill(stringResource(R.string.update_now), { scope.launch { c.updater.install() } }, Modifier.focusRequester(first), primary = true)
+                        Pill(stringResource(R.string.later), onLater, selected = true)
                     }
                 }
                 else -> Unit
@@ -266,7 +267,7 @@ private fun ScopeButton(scope: Service?, onClick: () -> Unit) {
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.size(36.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)))
             else Image(painterResource(R.drawable.ic_logo), "BoschTV", Modifier.size(36.dp))
-            androidx.tv.material3.Icon(Icons.Rounded.ExpandMore, "Kies streamingdienst", Modifier.padding(start = 4.dp).size(18.dp))
+            androidx.tv.material3.Icon(Icons.Rounded.ExpandMore, stringResource(R.string.choose_service), Modifier.padding(start = 4.dp).size(18.dp))
         }
     }
 }
@@ -283,7 +284,7 @@ private fun ScopePicker(current: Service?, onPick: (Service?) -> Unit) {
             Modifier.padding(start = 40.dp, top = 76.dp).width(668.dp)
                 .background(Ink.Surface, androidx.compose.foundation.shape.RoundedCornerShape(24.dp)).padding(20.dp),
         ) {
-            Text("Wat wil je zien?", style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
+            Text(stringResource(R.string.what_to_watch), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                 columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(6.dp),
@@ -293,9 +294,9 @@ private fun ScopePicker(current: Service?, onPick: (Service?) -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         nl.boschtv.tv.ui.Tile({ onPick(null) }, (if (current == null) Modifier.focusRequester(start) else Modifier).size(88.dp),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(23.dp), scale = 1.08f, color = Ink.Accent, focusedColor = Ink.Accent) {
-                            Image(painterResource(R.drawable.ic_logo), "Alles", Modifier.fillMaxSize())
+                            Image(painterResource(R.drawable.ic_logo), stringResource(R.string.everything), Modifier.fillMaxSize())
                         }
-                        Text("Alles", style = MaterialTheme.typography.labelMedium, color = if (current == null) Ink.Text else Ink.Muted, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+                        Text(stringResource(R.string.everything), style = MaterialTheme.typography.labelMedium, color = if (current == null) Ink.Text else Ink.Muted, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
                 items(services.size) { i ->
@@ -317,7 +318,7 @@ private fun MyList(nav: Nav, focus: FocusRequester) {
     val version by c.library.version.collectAsState()
     var cards by remember { mutableStateOf<List<Card>?>(null) }
     LaunchedEffect(version) { cards = c.library.myList() }
-    cards?.let { BrowseScreen(BrowseArgs("Mijn lijst", TitleQuery()), nav, focus, fixed = it) }
+    cards?.let { BrowseScreen(BrowseArgs(stringResource(R.string.tab_my_list), TitleQuery()), nav, focus, fixed = it) }
 }
 
 /** Small, unobtrusive note while the catalog refreshes in the background. */
@@ -326,6 +327,6 @@ private fun SyncBadge(modifier: Modifier) {
     val c = rememberContainer()
     val state by c.sync.state.collectAsState()
     val s = state as? SyncState.Running ?: return
-    Text("Catalogus bijwerken… ${(s.progress * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = Ink.Soft,
+    Text(stringResource(R.string.catalog_updating, (s.progress * 100).toInt()), style = MaterialTheme.typography.labelLarge, color = Ink.Soft,
         modifier = modifier.padding(20.dp).background(Ink.Surface.copy(alpha = 0.9f), nl.boschtv.tv.ui.PillShape).padding(horizontal = 14.dp, vertical = 8.dp))
 }

@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -116,7 +118,7 @@ fun DetailScreen(key: String, nav: Nav) {
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Ink.Bg, 0.32f to Ink.Bg, 0.62f to Ink.Bg.copy(alpha = 0.35f), 1f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 0.66f to Ink.Bg)))
 
-        // The header never scrolls; only the episodes / "meer zoals dit" area underneath does.
+        // The header never scrolls; only the episodes / "more like this" area underneath does.
         Column(Modifier.fillMaxSize()) {
             // Full header while you are on its buttons; once you move down into seasons and episodes it
             // collapses to the title line so the list gets the room. Going back up expands it again.
@@ -124,7 +126,7 @@ fun DetailScreen(key: String, nav: Nav) {
                 when { inRows && titleLines > 1 -> 174.dp; inRows -> 134.dp; titleLines > 1 -> 336.dp; else -> 296.dp }, label = "header")
             Box(Modifier.fillMaxWidth().height(headerHeight).clipToBounds()) {
                 Column(Modifier.padding(start = EDGE, top = 40.dp).fillMaxWidth(0.52f).wrapContentHeight(Alignment.Top, unbounded = true), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val eyebrow = (listOf(if (t.kind == KIND_MOVIE) "FILM" else "SERIE") + Service.of(t.services).take(2).map { it.label.uppercase() }).joinToString(" · ")
+                    val eyebrow = (listOf(stringResource(if (t.kind == KIND_MOVIE) R.string.kind_movie else R.string.kind_series).uppercase()) + Service.of(t.services).take(2).map { it.label.uppercase() }).joinToString(" · ")
                     Text(eyebrow, style = MaterialTheme.typography.labelSmall, color = Ink.AccentSoft)
                     Text(t.name, style = MaterialTheme.typography.displayMedium, color = Ink.Text, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         onTextLayout = { titleLines = it.lineCount })
@@ -132,38 +134,38 @@ fun DetailScreen(key: String, nav: Nav) {
                     MetaLine(listOfNotNull(
                         t.year?.toString(),
                         duration(t.durationSecs).ifBlank { null },
-                        if (seasons > 0) (if (seasons == 1) "1 seizoen" else "$seasons seizoenen") else null,
+                        if (seasons > 0) androidx.compose.ui.res.pluralStringResource(R.plurals.n_seasons, seasons, seasons) else null,
                         t.rating.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
-                        Genre.labels(t.genres).ifBlank { null },
+                        genreLine(t.genres).ifBlank { null },
                     ))
-                    Text(t.dPlot ?: t.pPlot ?: if (loading) "" else "Geen beschrijving beschikbaar.", style = MaterialTheme.typography.bodyLarge,
+                    Text(t.dPlot ?: t.pPlot ?: if (loading) "" else stringResource(R.string.no_description), style = MaterialTheme.typography.bodyLarge,
                         color = Ink.Soft, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(66.dp))
-                    t.actors?.let { Text("Met $it", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    t.actors?.let { Text(stringResource(R.string.with_cast, it), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 
                     // The buttons may run wider than the text column above them.
                     Row(Modifier.padding(top = 10.dp).wrapContentWidth(Alignment.Start, unbounded = true), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (t.kind == KIND_MOVIE) {
                             val p = progress["m:${t.key}"]?.takeIf { !it.finished && it.positionMs > 0 }
                             val left = p?.let { (it.durationMs - it.positionMs) / 60_000 }
-                            Pill(if (p != null) "Verder kijken · nog $left min" else "Afspelen", { Playback.title(ctx, t.key) },
+                            Pill(if (p != null) stringResource(R.string.continue_left, left!!.toInt()) else stringResource(R.string.play), { Playback.title(ctx, t.key) },
                                 Modifier.focusRequester(playFocus), primary = true, icon = Icons.Rounded.PlayArrow, height = 46.dp)
-                            if (p != null) Pill("Vanaf begin", { Playback.title(ctx, t.key, restart = true) }, icon = Icons.Rounded.Replay, selected = true, height = 46.dp)
+                            if (p != null) Pill(stringResource(R.string.from_start), { Playback.title(ctx, t.key, restart = true) }, icon = Icons.Rounded.Replay, selected = true, height = 46.dp)
                             c.catalog.versions(t).drop(1).forEach { v ->
-                                Pill(v.label, { Playback.title(ctx, t.key, streamId = v.streamId, container = v.container) }, selected = true, height = 46.dp)
+                                Pill(versionLabel(v.label), { Playback.title(ctx, t.key, streamId = v.streamId, container = v.container) }, selected = true, height = 46.dp)
                             }
                         } else {
                             val r = resume
                             val label = when {
                                 // Nothing came back: the provider did not answer. Offer another try rather than claim there is nothing.
-                                r == null -> if (loading || episodes.isNotEmpty()) "Laden…" else "Laden lukte niet · opnieuw proberen"
-                                r.second > 0 -> "Verder met S${r.first.season} A${r.first.number}"
-                                progress.isNotEmpty() -> "Volgende: S${r.first.season} A${r.first.number}"
-                                else -> "Afspelen · S${r.first.season} A${r.first.number}"
+                                r == null -> if (loading || episodes.isNotEmpty()) stringResource(R.string.loading) else stringResource(R.string.load_failed_retry)
+                                r.second > 0 -> stringResource(R.string.continue_ep, r.first.season, r.first.number)
+                                progress.isNotEmpty() -> stringResource(R.string.next_ep, r.first.season, r.first.number)
+                                else -> stringResource(R.string.play_ep, r.first.season, r.first.number)
                             }
                             Pill(label, { if (r != null) Playback.title(ctx, t.key, episodeId = r.first.id) else if (!loading) attempt++ }, Modifier.focusRequester(playFocus),
                                 primary = true, icon = Icons.Rounded.PlayArrow, height = 46.dp)
                         }
-                        Pill(if (inList) "In mijn lijst" else "Mijn lijst", { scope.launch { inList = c.library.toggleList(t.key) } },
+                        Pill(if (inList) stringResource(R.string.in_my_list) else stringResource(R.string.tab_my_list), { scope.launch { inList = c.library.toggleList(t.key) } },
                             icon = if (inList) Icons.Rounded.Check else Icons.Rounded.Add, selected = true, height = 46.dp)
                         Pill("", { scope.launch { liked = if (liked == true) null else true; c.library.rate(t.key, liked) } },
                             icon = Icons.Rounded.ThumbUp, selected = true, primary = liked == true, height = 46.dp)
@@ -184,7 +186,7 @@ fun DetailScreen(key: String, nav: Nav) {
                 val seasons = episodes.map { it.season }.distinct().sorted()
                 item("seasons") {
                     LazyRow(Modifier.padding(top = 4.dp), contentPadding = PaddingValues(horizontal = EDGE), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(seasons, key = { it }) { s -> Pill("Seizoen $s", { season = s }, selected = s == season) }
+                        items(seasons, key = { it }) { s -> Pill(stringResource(R.string.season_n, s), { season = s }, selected = s == season) }
                     }
                 }
                 item("episodes") {
@@ -197,7 +199,7 @@ fun DetailScreen(key: String, nav: Nav) {
                                 val p = progress["e:${e.id}"]
                                 val frac = p?.let { if (it.finished) 1f else if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f }
                                 val card = Card(e.id, 1, "${e.number}. ${e.name}", null, null, e.image ?: backdrop, 0.0, 0, 0, 0, 0, 0, e.plot,
-                                    progress = frac, label = listOfNotNull(duration(e.durationSecs).ifBlank { null }, if (p?.finished == true) "bekeken" else null).joinToString(" · ").ifBlank { null },
+                                    progress = frac, label = listOfNotNull(duration(e.durationSecs).ifBlank { null }, if (p?.finished == true) stringResource(R.string.watched) else null).joinToString(" · ").ifBlank { null },
                                     wideImage = e.image ?: backdrop)
                                 WideCard(card, { Playback.title(ctx, t.key, episodeId = e.id) }, Modifier.railEdge(index, shown.size))
                             }
@@ -207,7 +209,7 @@ fun DetailScreen(key: String, nav: Nav) {
             }
             if (similar.size >= 5) item("similar") {
                 Box(Modifier.padding(top = 6.dp)) {
-                    CardRow(HomeRow("similar", "Meer zoals dit", similar), onFocus = {}, onClick = { nav.openTitle(it.key) })
+                    CardRow(HomeRow("similar", stringResource(R.string.more_like_this), similar), onFocus = {}, onClick = { nav.openTitle(it.key) })
                 }
             }
             } }

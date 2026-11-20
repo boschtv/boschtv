@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -56,12 +58,13 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
     val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { text = it }
     }
+    val prompt = stringResource(R.string.search_prompt)
     val speak = {
         runCatching {
             voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, homeLocale)
-                .putExtra(RecognizerIntent.EXTRA_PROMPT, "Wat wil je kijken?"))
+                .putExtra(RecognizerIntent.EXTRA_PROMPT, prompt))
         }
         Unit
     }
@@ -76,7 +79,7 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
     Row(Modifier.fillMaxSize().padding(top = 84.dp)) {
         Column(Modifier.width(300.dp).padding(start = EDGE).focusRequester(focus).focusRestorer { firstKey }) {
             Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.CenterStart) {
-                Text(text.ifEmpty { if (service != null) "Zoek op ${service.label}" else "Zoek films en series" }, style = MaterialTheme.typography.headlineMedium,
+                Text(text.ifEmpty { if (service != null) stringResource(R.string.search_in, service.label) else stringResource(R.string.search_hint) }, style = MaterialTheme.typography.headlineMedium,
                     color = if (text.isEmpty()) Ink.Muted else Ink.Text, maxLines = 1)
             }
             val keys = "abcdefghijklmnopqrstuvwxyz1234567890".map { it.toString() }
@@ -98,9 +101,9 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
                 Tile(speak, Modifier.size(59.dp, 38.dp), scale = 1.06f, color = Ink.Accent, focusedColor = Ink.Text, focusedContent = Ink.Bg) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Mic, "Inspreken") } }
-                Tile({ text += " " }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SpaceBar, "Spatie") } }
-                Tile({ text = text.dropLast(1) }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Rounded.Backspace, "Wissen") } }
-                Tile({ text = "" }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Leeg", style = MaterialTheme.typography.labelLarge) } }
+                Tile({ text += " " }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SpaceBar, stringResource(R.string.key_space)) } }
+                Tile({ text = text.dropLast(1) }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Rounded.Backspace, stringResource(R.string.key_delete)) } }
+                Tile({ text = "" }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.key_clear), style = MaterialTheme.typography.labelLarge) } }
             }
         }
         LazyVerticalGrid(
@@ -112,7 +115,7 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
         ) {
             items(titles, key = { it.key }) { card -> PosterCard(card, { nav.openTitle(card.key) }) }
             if (text.trim().length >= 2 && titles.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Niets gevonden voor “$text”.", style = MaterialTheme.typography.titleLarge, color = Ink.Muted)
+                Text(stringResource(R.string.nothing_found_for, text), style = MaterialTheme.typography.titleLarge, color = Ink.Muted)
             }
         }
     }

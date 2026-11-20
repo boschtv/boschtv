@@ -1,5 +1,7 @@
 package nl.boschtv.tv.data.xtream
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import com.squareup.moshi.JsonReader
 import nl.boschtv.tv.core.JsonObj
 import nl.boschtv.tv.core.asObj
@@ -67,7 +69,7 @@ class XtreamClient(private val http: OkHttpClient) {
     private fun <T> get(url: HttpUrl, empty: T, block: (JsonReader) -> T): T {
         val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
         http.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("Server gaf fout ${resp.code}")
+            if (!resp.isSuccessful) throw IOException(Texts.get(R.string.err_server, resp.code))
             val body = resp.body ?: return empty
             val reader = JsonReader.of(body.source()).apply { isLenient = true }
             return try {
@@ -80,15 +82,15 @@ class XtreamClient(private val http: OkHttpClient) {
 
     fun account(src: Source): Account {
         val root = get(url(src, null), null) { it.readJsonValue().asObj() }
-        val u = root?.obj("user_info") ?: throw AuthException("Geen geldig antwoord van de server")
-        if (u.int("auth") == 0) throw AuthException("Gebruikersnaam of wachtwoord klopt niet")
+        val u = root?.obj("user_info") ?: throw AuthException(Texts.get(R.string.err_invalid))
+        if (u.int("auth") == 0) throw AuthException(Texts.get(R.string.err_login))
         val status = u.str("status").orEmpty().lowercase()
         val exp = u.long("exp_date")
         val expired = status in setOf("expired", "disabled", "banned") ||
             (exp != null && exp * 1000 <= System.currentTimeMillis())
         return Account(
             active = !expired,
-            message = if (expired) "Abonnement is verlopen" else "Actief",
+            message = if (expired) Texts.get(R.string.err_expired) else Texts.get(R.string.active),
             expiresAt = exp?.times(1000),
             maxConnections = u.int("max_connections") ?: 1,
             trial = u.bool("is_trial"),

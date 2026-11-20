@@ -149,7 +149,21 @@ follow your releases, official users follow the official ones, and neither can r
 
 ## 8. Pull requests
 
-- Keep commits small, with a short message describing the change.
-- Run the unit tests. For screen changes, check them on the emulator with the remote (arrow keys):
-  focus must be visible and never get lost.
-- Never commit logins, tokens or `local.properties`.
+Every change goes through a pull request; nobody pushes to `main` directly.
+
+1. Fork the repository (or make a branch if you are a maintainer) and make your change.
+2. Open a pull request against `main` and fill in the template.
+3. CI runs the tests, lint and a build. For first-time contributors a maintainer starts it.
+4. A maintainer reviews and approves; open review comments must be resolved.
+5. The pull request is squashed into one commit on `main`.
+
+Keep pull requests small and about one thing. Run the unit tests and lint before opening one, and
+check screen changes on the emulator with the remote: focus must stay visible and never get lost.
+New texts go into `res/values/strings.xml` (English); add the translations you can.
+Never commit logins, tokens, `local.properties`, provider names or brand logos.
+
+## 9. Translations
+
+The app's texts are in `app/src/main/res/values/strings.xml` (English). To add a language, copy it to
+`values-<language code>/strings.xml` (for example `values-de`) and translate the texts; keep the
+`%1$s`-style placeholders. The app follows the TV's language automatically.

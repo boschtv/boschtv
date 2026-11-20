@@ -1,5 +1,7 @@
 package nl.boschtv.tv.system
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
@@ -12,11 +14,11 @@ import kotlinx.coroutines.withContext
 import nl.boschtv.tv.data.Catalog
 import nl.boschtv.tv.data.Library
 
-/** Mirrors "Verder kijken" into the Continue Watching row of the Google TV home screen. */
+/** Mirrors "Continue watching" into the Continue Watching row of the Google TV home screen. */
 class WatchNext(private val context: Context, private val catalog: Catalog, private val library: Library) {
 
     /** What the last publish did, shown in Settings so it can be checked on the TV itself. */
-    val status = kotlinx.coroutines.flow.MutableStateFlow("nog niet geprobeerd")
+    val status = kotlinx.coroutines.flow.MutableStateFlow(Texts.get(R.string.wn_not_tried))
 
     @SuppressLint("RestrictedApi")
     suspend fun publish() = withContext(Dispatchers.IO) {
@@ -61,8 +63,8 @@ class WatchNext(private val context: Context, private val catalog: Catalog, priv
             // Read our own entries back: this is what the home screen can draw from.
             var stored = 0
             context.contentResolver.query(WatchNextPrograms.CONTENT_URI, arrayOf(WatchNextPrograms._ID), null, null, null)?.use { stored = it.count }
-            "$stored titels gepubliceerd"
+            Texts.get(R.string.wn_published, stored)
         }
-        status.value = result.getOrElse { "mislukt: ${it.javaClass.simpleName} ${it.message.orEmpty().take(60)}" }
+        status.value = result.getOrElse { Texts.get(R.string.wn_failed, "${it.javaClass.simpleName} ${it.message.orEmpty().take(60)}") }
     }
 }

@@ -70,6 +70,7 @@ class App : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        nl.boschtv.tv.ui.Texts.init(resources)
         deleteDatabase("boschtv.db")
         container = AppContainer(this)
         SyncWorker.schedule(this)

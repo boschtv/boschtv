@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -178,7 +180,7 @@ fun PosterCard(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, o
                 Text("$rank", style = MaterialTheme.typography.displayMedium, color = Ink.Text,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 2.dp))
             } else if (badge && card.isNew) {
-                Text("NIEUW", style = MaterialTheme.typography.labelSmall, color = Color.White,
+                Text(stringResource(R.string.label_new), style = MaterialTheme.typography.labelSmall, color = Color.White,
                     modifier = Modifier.padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Ink.Accent).padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
@@ -301,7 +303,7 @@ fun CardRow(
                     if (onMore != null && row.cards.size >= 12) item(key = "more", contentType = "more") {
                         Tile(onMore, Modifier.size(POSTER_W, POSTER_H).focusProperties { right = FocusRequester.Cancel }, onFocus = { onFocus(null) }) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Alles\nbekijken", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                Text(stringResource(R.string.see_all), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                             }
                         }
                     }
@@ -333,8 +335,8 @@ fun MetaLine(parts: List<String>, modifier: Modifier = Modifier) {
 
 fun duration(secs: Long): String = when {
     secs <= 0 -> ""
-    secs >= 3600 -> "${secs / 3600} u ${(secs % 3600) / 60} min"
-    else -> "${secs / 60} min"
+    secs >= 3600 -> Texts.get(R.string.duration_hm, secs / 3600, (secs % 3600) / 60)
+    else -> Texts.get(R.string.duration_m, secs / 60)
 }
 
 /**

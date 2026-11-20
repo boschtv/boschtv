@@ -1,5 +1,7 @@
 package nl.boschtv.tv.system
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -54,13 +56,13 @@ class Updater(private val app: Context, private val http: OkHttpClient) {
             val req = Request.Builder().url(BuildConfig.UPDATE_URL).header("Cache-Control", "no-cache").build()
             http.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) error("HTTP ${r.code}")
-                val o = com.squareup.moshi.JsonReader.of(r.body!!.source()).readJsonValue().asObj() ?: error("Ongeldig")
-                val code = o.long("versionCode") ?: error("Geen versie")
-                val apk = o.str("apk") ?: error("Geen download")
+                val o = com.squareup.moshi.JsonReader.of(r.body!!.source()).readJsonValue().asObj() ?: error("invalid update.json")
+                val code = o.long("versionCode") ?: error("no versionCode")
+                val apk = o.str("apk") ?: error("no apk")
                 if (code > BuildConfig.VERSION_CODE) State.Available(o.str("versionName") ?: "$code", o.str("notes"), apk) else State.UpToDate
             }
         }
-        _state.value = result.getOrElse { if (force) State.Failed("Controleren lukte niet") else State.Idle }
+        _state.value = result.getOrElse { if (force) State.Failed(Texts.get(R.string.check_failed)) else State.Idle }
     }
 
     /** Downloads the new version and opens Android's install confirmation. */
@@ -88,7 +90,7 @@ class Updater(private val app: Context, private val http: OkHttpClient) {
             }
             commit(file)
         }
-        if (ok.isFailure) _state.value = State.Failed("Downloaden lukte niet")
+        if (ok.isFailure) _state.value = State.Failed(Texts.get(R.string.download_failed))
         else _state.value = available   // stays offered until the new version is running
     }
 

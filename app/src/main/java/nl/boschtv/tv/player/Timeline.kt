@@ -1,5 +1,8 @@
 package nl.boschtv.tv.player
 
+import nl.boschtv.tv.ui.Texts
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -118,9 +121,9 @@ private fun dayLabel(ms: Long, now: Long): String {
     val today = LocalDate.now(zone)
     return when (d) {
         today -> ""
-        today.plusDays(1) -> "Morgen "
-        today.minusDays(1) -> "Gisteren "
-        else -> d.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("nl")).replaceFirstChar(Char::uppercase) + " "
+        today.plusDays(1) -> Texts.get(R.string.tomorrow)
+        today.minusDays(1) -> Texts.get(R.string.yesterday)
+        else -> d.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()).replaceFirstChar(Char::uppercase) + " "
     }
 }
 
@@ -181,7 +184,7 @@ fun Timeline(
                     val live = sel.start <= now && sel.stop > now
                     Text(sel.title, style = MaterialTheme.typography.headlineMedium, color = Ink.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     val mins = (sel.stop - sel.start) / 60_000
-                    Text("${dayLabel(sel.start, now)}${hm(sel.start)} – ${hm(sel.stop)}  ·  $mins min" + if (live) "  ·  nog ${(sel.stop - now) / 60_000} min" else "",
+                    Text(stringResource(R.string.programme_time, dayLabel(sel.start, now), hm(sel.start), hm(sel.stop), mins.toInt()) + if (live) stringResource(R.string.min_left, ((sel.stop - now) / 60_000).toInt()) else "",
                         style = MaterialTheme.typography.titleSmall, color = Ink.Soft)
                     if (live) {
                         val f = ((now - sel.start).toFloat() / (sel.stop - sel.start).coerceAtLeast(1)).coerceIn(0f, 1f)
@@ -189,14 +192,14 @@ fun Timeline(
                     }
                     sel.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 3, overflow = TextOverflow.Ellipsis) }
                 } else if (ch != null) {
-                    Text(if (ch.id !in t.programmes) "Gids laden…" else "Geen gids voor dit moment", style = MaterialTheme.typography.headlineSmall, color = Ink.Soft)
+                    Text(stringResource(if (ch.id !in t.programmes) R.string.guide_loading else R.string.no_guide_now), style = MaterialTheme.typography.headlineSmall, color = Ink.Soft)
                 }
                 val action = when {
                     t.note != null -> t.note!!
-                    sel == null || sel.start <= now && sel.stop > now -> "OK  kijken"
-                    sel.stop <= now && ch?.archive == true -> "OK  terugkijken vanaf het begin"
-                    sel.stop <= now -> "Al geweest"
-                    else -> "Begint ${dayLabel(sel.start, now).lowercase()}om ${hm(sel.start)}"
+                    sel == null || sel.start <= now && sel.stop > now -> stringResource(R.string.ok_watch)
+                    sel.stop <= now && ch?.archive == true -> stringResource(R.string.ok_replay)
+                    sel.stop <= now -> stringResource(R.string.already_aired)
+                    else -> stringResource(R.string.starts, dayLabel(sel.start, now).lowercase(), hm(sel.start))
                 }
                 Text(action, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = if (t.note != null) Ink.AccentSoft else Ink.Text, modifier = Modifier.padding(top = 4.dp))
@@ -268,7 +271,7 @@ private fun ChannelRow(
                 list.none { it.stop > t.windowStart && it.start < end } -> Box(
                     Modifier.fillMaxSize().clip(shape).background(if (selectedRow) Ink.Text else Ink.Surface.copy(alpha = 0.35f)).padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart,
-                ) { Text("Geen gids", style = MaterialTheme.typography.labelLarge, color = if (selectedRow) Ink.Bg else Ink.Muted) }
+                ) { Text(stringResource(R.string.no_guide), style = MaterialTheme.typography.labelLarge, color = if (selectedRow) Ink.Bg else Ink.Muted) }
                 else -> for (seg in segments(list)) {
                     if (seg.stop <= t.windowStart || seg.start >= end) continue
                     val from = maxOf(seg.start, t.windowStart)
