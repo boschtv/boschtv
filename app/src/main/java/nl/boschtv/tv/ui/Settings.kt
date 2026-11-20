@@ -114,6 +114,11 @@ fun SettingsScreen(focus: FocusRequester) {
                 Toggle(stringResource(R.string.flemish), "", content.belgian) { setContent(content.copy(belgian = !content.belgian)) }
             }
 
+            Heading(stringResource(R.string.previews))
+            val previews by c.prefs.previews.collectAsState(true to true)
+            Toggle(stringResource(R.string.previews_on), "", previews.first) { scope.launch { c.prefs.setPreviews(!previews.first, previews.second) } }
+            if (previews.first) Toggle(stringResource(R.string.previews_sound), "", previews.second) { scope.launch { c.prefs.setPreviews(true, !previews.second) } }
+
             Heading(stringResource(R.string.data))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(stringResource(R.string.clear_history), { scope.launch { c.library.clearHistory(); note = Texts.get(R.string.history_cleared) } }, selected = true)
