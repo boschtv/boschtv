@@ -30,17 +30,17 @@ android {
         buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("update.url", "")}\"")
     }
 
+    // Official releases are signed with a private release key named in local.properties (never in git).
+    // Without one (forks, contributors, CI) the standard debug key is used, created on first build.
+    // Android only installs an update signed with the same key as the installed app, so another
+    // build can never replace an install from the official releases, and vice versa.
+    val releaseStore = localProps.getProperty("signing.store")
     signingConfigs {
-        // Official releases are signed with a private release key named in local.properties (never in git).
-        // Without one (forks, contributors) this machine's debug key is used. Android only installs an
-        // update signed with the same key as the installed app, so another build can never replace an
-        // install from the official releases, and vice versa.
-        create("sideload") {
-            val store = localProps.getProperty("signing.store")
-            storeFile = file(store ?: (System.getProperty("user.home") + "/.android/debug.keystore"))
-            storePassword = if (store != null) localProps.getProperty("signing.password") else "android"
-            keyAlias = if (store != null) localProps.getProperty("signing.alias", "boschtv") else "androiddebugkey"
-            keyPassword = if (store != null) localProps.getProperty("signing.password") else "android"
+        if (releaseStore != null) create("release") {
+            storeFile = file(releaseStore)
+            storePassword = localProps.getProperty("signing.password")
+            keyAlias = localProps.getProperty("signing.alias", "boschtv")
+            keyPassword = localProps.getProperty("signing.password")
         }
     }
 
@@ -48,7 +48,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("sideload")
+            signingConfig = signingConfigs.getByName(if (releaseStore != null) "release" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
