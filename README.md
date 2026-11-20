@@ -38,8 +38,8 @@ New versions are offered by the app itself (Settings → Check for updates).
   `┃NL┃`, `[DE]`, `FR:`, `Movies | EN`, "Dutch Movies", "Turkse series".
 - **Home, Films, Series, Kids** with rows ordered by your taste, the time of day and the season; Top 10
   and "new and popular" per streaming service from TMDB.
-- **Streaming services.** Pick a streaming service from the logo top left; the whole app then shows
-  only that service's titles.
+- **Services.** Pick a service from the logo top left; the whole app then shows only that service's
+  titles.
 - **Genres** with combinable filters for kind, year and sort order.
 - **Player.** Resume, next episode with countdown, subtitles and audio tracks, fast skipping.
 - **Live TV.** Last channel on start, up/down zapping, number keys, channel lists, favourites, a
