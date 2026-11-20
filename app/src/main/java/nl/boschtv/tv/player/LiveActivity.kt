@@ -1,5 +1,8 @@
 package nl.boschtv.tv.player
 
+import nl.boschtv.tv.ui.Texts
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -100,7 +103,7 @@ class LiveUi {
     var replay by mutableStateOf<ProgrammeEntity?>(null)
 }
 
-private val HHMM = SimpleDateFormat("HH:mm", Locale("nl"))
+private val HHMM = SimpleDateFormat("HH:mm", Locale.getDefault())
 private fun hhmm(ms: Long) = HHMM.format(Date(ms))
 
 /** Live TV that behaves like a TV: opens on the last channel, zaps with up/down, numbers jump, OK opens the guide. */
@@ -136,12 +139,12 @@ class LiveActivity : ComponentActivity() {
     private suspend fun init() {
         ext = c.prefs.liveExt()
         val dao = c.db.channels()
-        ui.groups = listOf(LiveGroup(GROUP_FAVORITES, "Favorieten")) + dao.groups().map { LiveGroup(it.id, it.name) } + LiveGroup(GROUP_ALL, "Alle zenders")
+        ui.groups = listOf(LiveGroup(GROUP_FAVORITES, Texts.get(R.string.favorites))) + dao.groups().map { LiveGroup(it.id, it.name) } + LiveGroup(GROUP_ALL, Texts.get(R.string.all_channels))
         val (lastId, lastGroup) = c.prefs.lastChannel()
         val wantedId = intent.getLongExtra(Playback.CHANNEL, 0).takeIf { it != 0L }
         val wanted = (wantedId ?: lastId)?.let { dao.channel(it) }
         val first = wanted ?: dao.all().firstOrNull()
-        if (first == null) { ui.problem = "Geen zenders gevonden. Vernieuw de catalogus bij Instellingen."; return }
+        if (first == null) { ui.problem = Texts.get(R.string.no_channels); return }
         val group = if (wantedId == null && lastGroup != null && channelsOf(lastGroup).any { it.id == first.id }) lastGroup else first.groupId
         ui.zapGroup = group
         ui.zapList = channelsOf(group)
@@ -194,8 +197,8 @@ class LiveActivity : ComponentActivity() {
                 if (ch.id != ui.current?.id || ui.replay != null) pick(ui.zapGroup, ui.zapList, ch)
             }
             p.stop <= now && ch.archive -> { ui.timeline = false; replay(ch, p) }
-            p.stop <= now -> g.note = "Deze zender biedt geen terugkijken"
-            else -> g.note = "Dit begint pas om ${hhmm(p.start)}"
+            p.stop <= now -> g.note = Texts.get(R.string.no_catchup)
+            else -> g.note = Texts.get(R.string.starts_at, hhmm(p.start))
         }
     }
 
@@ -246,10 +249,10 @@ class LiveActivity : ComponentActivity() {
     private fun retry() {
         val ch = ui.current ?: return
         if (!onScreen || released) return      // never reconnect from the background: it would steal the single stream
-        if (ui.replay != null) { ui.problem = "Terugkijken lukt niet voor dit programma"; return }
+        if (ui.replay != null) { ui.problem = Texts.get(R.string.replay_failed); return }
         attempt++
         if (attempt == 2) ext = if (ext == "m3u8") "ts" else "m3u8"
-        if (attempt > 6) ui.problem = "Deze zender doet het nu niet"
+        if (attempt > 6) ui.problem = Texts.get(R.string.channel_down)
         lifecycleScope.launch {
             delay(minOf(8000L, 900L * attempt))
             if (onScreen && !released && ui.current?.id == ch.id) open(ch)
@@ -404,15 +407,15 @@ private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEnt
                 Text(ch.name, style = MaterialTheme.typography.headlineMedium, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val now = programmes.getOrNull(0)
                 if (replay != null) {
-                    Text("Vanaf begin  ·  ${hhmm(replay.start)}  ${replay.title}", style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("◀ ▶ 30 seconden spoelen  ·  OK pauze  ·  Terug = live", style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
+                    Text(stringResource(R.string.from_start_banner, hhmm(replay.start), replay.title), style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
                 } else if (now != null) {
                     Text("${hhmm(now.start)}  ${now.title}", style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ProgressLine(now, Modifier.fillMaxWidth(0.5f))
-                    programmes.getOrNull(1)?.let { Text("Straks  ${hhmm(it.start)}  ${it.title}", style = MaterialTheme.typography.titleMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    programmes.getOrNull(1)?.let { Text(stringResource(R.string.up_next, hhmm(it.start), it.title), style = MaterialTheme.typography.titleMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
-            Text("OK  zenders     ▶  tv-gids     ▲▼  zappen", style = MaterialTheme.typography.labelLarge, color = Ink.Muted)
+            Text(stringResource(R.string.live_keys), style = MaterialTheme.typography.labelLarge, color = Ink.Muted)
         }
     }
 }
@@ -449,7 +452,7 @@ private fun Guide(
         LazyColumn(Modifier.width(206.dp).fillMaxHeight(), contentPadding = PaddingValues(start = 28.dp, top = 36.dp, bottom = 36.dp, end = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item(key = "timeline") {
-                Pill("Tv-gids", onTimeline, Modifier.fillMaxWidth().padding(bottom = 8.dp), primary = true, icon = Icons.Rounded.DateRange)
+                Pill(stringResource(R.string.tv_guide), onTimeline, Modifier.fillMaxWidth().padding(bottom = 8.dp), primary = true, icon = Icons.Rounded.DateRange)
             }
             items(ui.groups, key = { it.id }) { g ->
                 Pill(g.name, { group = g.id; if (g.id == ui.zapGroup) channels = ui.zapList }, Modifier.fillMaxWidth(), selected = g.id == group)
@@ -458,7 +461,7 @@ private fun Guide(
         LazyColumn(Modifier.width(370.dp).fillMaxHeight(), state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 36.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (channels.isEmpty()) item {
-                Text(if (group == GROUP_FAVORITES) "Nog geen favorieten. Houd OK ingedrukt op een zender om hem toe te voegen." else "Geen zenders in deze lijst.",
+                Text(stringResource(if (group == GROUP_FAVORITES) R.string.no_favorites else R.string.no_channels_list),
                     style = MaterialTheme.typography.titleMedium, color = Ink.Muted, modifier = Modifier.padding(16.dp))
             }
             itemsIndexed(channels, key = { _, ch -> ch.id }) { i, ch ->
@@ -480,7 +483,7 @@ private fun Guide(
                             val now by produceState<ProgrammeEntity?>(null, ch.id) { delay(350); value = schedule(ch).firstOrNull() }
                             now?.let { Text(it.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
-                        if (ch.id in ui.favorites) Icon(Icons.Rounded.Star, "Favoriet", tint = Ink.Accent, modifier = Modifier.size(18.dp))
+                        if (ch.id in ui.favorites) Icon(Icons.Rounded.Star, stringResource(R.string.favorite), tint = Ink.Accent, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -492,7 +495,7 @@ private fun Guide(
                 val list by produceState<List<ProgrammeEntity>?>(null, ch.id) { value = null; delay(300); value = schedule(ch) }
                 when {
                     list == null -> Unit
-                    list!!.isEmpty() -> Text("Geen gids voor deze zender.", style = MaterialTheme.typography.titleMedium, color = Ink.Muted, modifier = Modifier.padding(top = 14.dp))
+                    list!!.isEmpty() -> Text(stringResource(R.string.no_guide_channel), style = MaterialTheme.typography.titleMedium, color = Ink.Muted, modifier = Modifier.padding(top = 14.dp))
                     else -> list!!.take(8).forEachIndexed { i, p ->
                         Row(Modifier.padding(top = if (i == 0) 16.dp else 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             Text(hhmm(p.start), style = MaterialTheme.typography.titleMedium, color = if (i == 0) Ink.AccentSoft else Ink.Muted, modifier = Modifier.width(48.dp))
@@ -504,14 +507,14 @@ private fun Guide(
                                     p.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 3, overflow = TextOverflow.Ellipsis) }
                                     // Channels with catch-up: start the current programme from its beginning.
                                     if (ch.archive && p.start < System.currentTimeMillis()) {
-                                        Pill("Kijk vanaf begin", { onReplay(ch, p) }, Modifier.padding(top = 8.dp), selected = true)
+                                        Pill(stringResource(R.string.watch_from_start), { onReplay(ch, p) }, Modifier.padding(top = 8.dp), selected = true)
                                     }
                                 }
                             }
                         }
                     }
                 }
-                Text("OK kijken  ·  OK ingedrukt houden: favoriet", style = MaterialTheme.typography.labelLarge, color = Ink.Muted, modifier = Modifier.padding(top = 22.dp))
+                Text(stringResource(R.string.guide_keys), style = MaterialTheme.typography.labelLarge, color = Ink.Muted, modifier = Modifier.padding(top = 22.dp))
             }
         }
     }

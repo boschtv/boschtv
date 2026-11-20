@@ -2,6 +2,8 @@
 
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -52,90 +54,90 @@ fun SettingsScreen(focus: FocusRequester) {
     LaunchedEffect(Unit) { c.watchNext.publish() }
     var note by remember { mutableStateOf<String?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
-    val date = remember { SimpleDateFormat("d MMMM yyyy", Locale("nl")) }
-    val time = remember { SimpleDateFormat("d MMM HH:mm", Locale("nl")) }
+    val date = remember { SimpleDateFormat("d MMMM yyyy", Locale.getDefault()) }
+    val time = remember { SimpleDateFormat("d MMM HH:mm", Locale.getDefault()) }
     LaunchedEffect(Unit) { delay(120); runCatching { focus.requestFocus() } }
 
-    fun setContent(new: ContentPrefs) = scope.launch { c.prefs.saveContent(new); note = "Aangepast. De catalogus wordt opnieuw opgebouwd."; c.refreshIfStale(force = true) }
+    fun setContent(new: ContentPrefs) = scope.launch { c.prefs.saveContent(new); note = Texts.get(R.string.settings_changed); c.refreshIfStale(force = true) }
 
     // Two columns instead of one long list: everything fits on one screen, nothing scrolls under the top bar.
     Row(Modifier.fillMaxSize().padding(start = EDGE, end = EDGE, top = 88.dp), horizontalArrangement = Arrangement.spacedBy(56.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Instellingen", style = MaterialTheme.typography.headlineLarge, color = Ink.Text)
+            Text(stringResource(R.string.settings), style = MaterialTheme.typography.headlineLarge, color = Ink.Text)
 
-            Heading("Abonnement")
-            Info("Server", source.host.removePrefix("http://").removePrefix("https://"))
-            Info("Gebruiker", source.username)
-            Info("Geldig tot", account.expiresAt?.let { date.format(Date(it)) + if (account.trial) " (proef)" else "" } ?: "onbekend")
-            Info("Tegelijk kijken", "${account.maxConnections} scherm" + if (account.maxConnections == 1) "" else "en")
+            Heading(stringResource(R.string.subscription))
+            Info(stringResource(R.string.server), source.host.removePrefix("http://").removePrefix("https://"))
+            Info(stringResource(R.string.user), source.username)
+            Info(stringResource(R.string.valid_until), account.expiresAt?.let { date.format(Date(it)).let { d -> if (account.trial) stringResource(R.string.trial_suffix, d) else d } } ?: stringResource(R.string.unknown))
+            Info(stringResource(R.string.screens), androidx.compose.ui.res.pluralStringResource(R.plurals.n_screens, account.maxConnections, account.maxConnections))
             account.problem?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft) }
 
-            Heading("Catalogus")
+            Heading(stringResource(R.string.catalog))
             val status = when (val st = sync) {
                 is SyncState.Running -> "${st.message} ${(st.progress * 100).toInt()}%"
-                is SyncState.Failed -> "Mislukt: ${st.message}"
-                SyncState.Idle -> if (lastSync > 0) "Laatst bijgewerkt ${time.format(Date(lastSync))}" else "Nog niet bijgewerkt"
+                is SyncState.Failed -> stringResource(R.string.failed_msg, st.message)
+                SyncState.Idle -> if (lastSync > 0) stringResource(R.string.last_updated, time.format(Date(lastSync))) else stringResource(R.string.not_updated)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Pill("Nu bijwerken", { c.refreshIfStale(force = true) }, Modifier.focusRequester(focus), selected = true)
+                Pill(stringResource(R.string.update_catalog), { c.refreshIfStale(force = true) }, Modifier.focusRequester(focus), selected = true)
                 Text(status, style = MaterialTheme.typography.titleMedium, color = Ink.Soft)
             }
-            Text("Bijwerken gaat vanzelf, een paar keer per dag.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+            Text(stringResource(R.string.auto_updates), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
             val report by c.prefs.syncReport.collectAsState(initial = null)
             report?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Soft, maxLines = 2) }
 
-            Heading("Google TV-startscherm")
-            Info("Verder kijken", homeRow)
-            Text("De app biedt deze titels aan voor de rij Verder kijken. Of Google TV ze toont, bepaalt Google.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+            Heading(stringResource(R.string.gtv_home))
+            Info(stringResource(R.string.continue_watching), homeRow)
+            Text(stringResource(R.string.gtv_note), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
         }
         Column(Modifier.weight(1f).padding(top = 44.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Heading("Wat wil je zien")
+            Heading(stringResource(R.string.what_to_see))
             // Your language: kept, with English as fallback; every other language is left out.
             var choosing by remember { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Pill(content.home.label, { choosing = !choosing }, selected = true, icon = if (choosing) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore)
+                Pill(content.home.title(), { choosing = !choosing }, selected = true, icon = if (choosing) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore)
                 Column {
-                    Text("Taal van films, series en zenders", style = MaterialTheme.typography.titleMedium, color = Ink.Text)
-                    Text("Andere talen worden weggelaten.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+                    Text(stringResource(R.string.content_language), style = MaterialTheme.typography.titleMedium, color = Ink.Text)
+                    Text(stringResource(R.string.other_langs_left_out), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
                 }
             }
             if (choosing) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (l in nl.boschtv.tv.core.Language.choices) {
-                    Pill(l.label, { choosing = false; if (l != content.home) setContent(content.copy(home = l)) }, selected = l == content.home, primary = l == content.home)
+                    Pill(l.title(), { choosing = false; if (l != content.home) setContent(content.copy(home = l)) }, selected = l == content.home, primary = l == content.home)
                 }
             }
             if (content.home != nl.boschtv.tv.core.Language.ENGLISH) {
-                Toggle("Engelstalige films en series als aanvulling", "Alleen titels die er niet in het ${content.home.label.substringBefore(' ')} zijn.", content.english) { setContent(content.copy(english = !content.english)) }
-                Toggle("Engelse tv-zenders (UK en VS)", "Voegt een paar duizend zenders toe aan live tv.", content.englishLive) { setContent(content.copy(englishLive = !content.englishLive)) }
+                Toggle(stringResource(R.string.english_fallback), stringResource(R.string.english_fallback_hint, content.home.title().substringBefore(" (")), content.english) { setContent(content.copy(english = !content.english)) }
+                Toggle(stringResource(R.string.english_live), stringResource(R.string.english_live_hint), content.englishLive) { setContent(content.copy(englishLive = !content.englishLive)) }
             }
             if (content.home == nl.boschtv.tv.core.Language.DUTCH) {
-                Toggle("Vlaamse films, series en zenders", "", content.belgian) { setContent(content.copy(belgian = !content.belgian)) }
+                Toggle(stringResource(R.string.flemish), "", content.belgian) { setContent(content.copy(belgian = !content.belgian)) }
             }
 
-            Heading("Gegevens")
+            Heading(stringResource(R.string.data))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("Kijkgeschiedenis wissen", { scope.launch { c.library.clearHistory(); note = "Kijkgeschiedenis gewist." } }, selected = true)
-                Pill(if (confirmLogout) "Zeker weten? Druk nog eens" else "Uitloggen", { if (confirmLogout) scope.launch { c.prefs.logout() } else confirmLogout = true }, selected = true, primary = confirmLogout)
+                Pill(stringResource(R.string.clear_history), { scope.launch { c.library.clearHistory(); note = Texts.get(R.string.history_cleared) } }, selected = true)
+                Pill(if (confirmLogout) stringResource(R.string.sure_again) else stringResource(R.string.log_out), { if (confirmLogout) scope.launch { c.prefs.logout() } else confirmLogout = true }, selected = true, primary = confirmLogout)
             }
             note?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft, modifier = Modifier.padding(top = 8.dp)) }
 
-            Heading("App")
-            Info("Versie", nl.boschtv.tv.BuildConfig.VERSION_NAME)
-            Text("Open source (MIT) · github.com/boschtv/boschtv · licenties van gebruikte software staan daar.",
+            Heading(stringResource(R.string.app))
+            Info(stringResource(R.string.version), nl.boschtv.tv.BuildConfig.VERSION_NAME)
+            Text(stringResource(R.string.open_source),
                 style = MaterialTheme.typography.bodySmall, color = Ink.Muted)
             // Required by TMDB's API terms.
-            Text("Gebruikt de TMDB API, maar is niet goedgekeurd of gecertificeerd door TMDB. Gegevens over streamingdiensten: JustWatch.",
+            Text(stringResource(R.string.tmdb_credit),
                 style = MaterialTheme.typography.bodySmall, color = Ink.Muted)
             if (c.updater.enabled) {
                 val up by c.updater.state.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     val offer = up as? nl.boschtv.tv.system.Updater.State.Available
-                    Pill(if (offer != null) "Bijwerken naar ${offer.versionName}" else "Controleren op updates",
+                    Pill(if (offer != null) stringResource(R.string.update_to, offer.versionName) else stringResource(R.string.check_updates),
                         { scope.launch { if (offer != null) c.updater.install() else c.updater.check(force = true) } }, selected = true, primary = offer != null)
                     val status = when (val s = up) {
-                        is nl.boschtv.tv.system.Updater.State.Checking -> "Controleren…"
-                        is nl.boschtv.tv.system.Updater.State.UpToDate -> "Je hebt de nieuwste versie"
-                        is nl.boschtv.tv.system.Updater.State.Downloading -> "Downloaden… ${(s.progress * 100).toInt()}%"
+                        is nl.boschtv.tv.system.Updater.State.Checking -> stringResource(R.string.checking)
+                        is nl.boschtv.tv.system.Updater.State.UpToDate -> stringResource(R.string.up_to_date)
+                        is nl.boschtv.tv.system.Updater.State.Downloading -> stringResource(R.string.downloading_pct, (s.progress * 100).toInt())
                         is nl.boschtv.tv.system.Updater.State.Failed -> s.message
                         else -> ""
                     }
@@ -157,7 +159,7 @@ private fun Info(label: String, value: String) = Row {
 
 @Composable
 private fun Toggle(title: String, hint: String, on: Boolean, onClick: () -> Unit) = Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-    Pill(if (on) "Aan" else "Uit", onClick, Modifier.width(84.dp), selected = true, primary = on)
+    Pill(stringResource(if (on) R.string.on else R.string.off), onClick, Modifier.width(84.dp), selected = true, primary = on)
     Column {
         Text(title, style = MaterialTheme.typography.titleMedium, color = Ink.Text)
         if (hint.isNotEmpty()) Text(hint, style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)

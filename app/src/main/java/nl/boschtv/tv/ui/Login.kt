@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.ui.Texts
+import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -73,12 +75,12 @@ fun LoginScreen() {
 
     fun login(src: Source) {
         if (busy) return
-        if (!src.isConfigured) { status = "Vul server, gebruikersnaam en wachtwoord in."; return }
-        busy = true; status = "Inloggen…"
+        if (!src.isConfigured) { status = Texts.get(R.string.fill_in); return }
+        busy = true; status = Texts.get(R.string.logging_in)
         scope.launch {
             val result = c.sync.sync(src)
             if (result.isSuccess) { c.prefs.saveSource(src); c.refreshIfStale() }
-            else status = "Dat lukte niet: ${result.exceptionOrNull()?.message ?: "onbekende fout"}"
+            else status = Texts.get(R.string.login_failed, result.exceptionOrNull()?.message ?: Texts.get(R.string.unknown_error))
             busy = false
         }
     }
@@ -94,26 +96,26 @@ fun LoginScreen() {
                 Image(painterResource(R.drawable.ic_logo), "BoschTV", Modifier.size(52.dp))
                 Text("  boschtv", style = MaterialTheme.typography.displayMedium, color = Ink.Text)
             }
-            Text("Log in met je IPTV-abonnement", style = MaterialTheme.typography.titleLarge, color = Ink.Soft, modifier = Modifier.padding(bottom = 8.dp))
-            Field(host, { host = it }, "Server, bijvoorbeeld http://voorbeeld.nl", type = KeyboardType.Uri)
-            Field(user, { user = it }, "Gebruikersnaam")
-            Field(pass, { pass = it }, "Wachtwoord", last = true)
-            Pill(if (busy) "Bezig…" else "Inloggen", { login(Source.of(host, user, pass)) }, Modifier.padding(top = 8.dp).focusRequester(first), primary = true, height = 48.dp)
+            Text(stringResource(R.string.login_title), style = MaterialTheme.typography.titleLarge, color = Ink.Soft, modifier = Modifier.padding(bottom = 8.dp))
+            Field(host, { host = it }, stringResource(R.string.server_hint), type = KeyboardType.Uri)
+            Field(user, { user = it }, stringResource(R.string.username))
+            Field(pass, { pass = it }, stringResource(R.string.password), last = true)
+            Pill(if (busy) stringResource(R.string.busy) else stringResource(R.string.log_in), { login(Source.of(host, user, pass)) }, Modifier.padding(top = 8.dp).focusRequester(first), primary = true, height = 48.dp)
             val running = sync as? SyncState.Running
             if (busy && running != null) {
                 Text("${running.message}  ${(running.progress * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft)
                 Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Ink.Line)) {
                     Box(Modifier.fillMaxWidth(running.progress.coerceIn(0.02f, 1f)).height(6.dp).background(Ink.Accent))
                 }
-                Text("De eerste keer duurt dit een minuut of twee. Daarna gaat bijwerken vanzelf.", style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
+                Text(stringResource(R.string.first_time), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
             } else status?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft) }
         }
         val address = remember { server.address }
         if (address != null) Column(Modifier.width(300.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             val qr = remember(address) { qrBitmap(address) }
-            Image(qr.asImageBitmap(), "QR-code naar $address", Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp), filterQuality = FilterQuality.None)
-            Text("Makkelijker: scan met je telefoon", style = MaterialTheme.typography.titleLarge, color = Ink.Text)
-            Text("Plak daar de link van je aanbieder. Je telefoon moet op hetzelfde wifi-netwerk zitten.\n$address",
+            Image(qr.asImageBitmap(), stringResource(R.string.qr_to, address), Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).padding(14.dp), filterQuality = FilterQuality.None)
+            Text(stringResource(R.string.easier_phone), style = MaterialTheme.typography.titleLarge, color = Ink.Text)
+            Text(stringResource(R.string.phone_paste, address),
                 style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
         }
     }

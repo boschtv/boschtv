@@ -1,5 +1,7 @@
 package nl.boschtv.tv.data
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -36,7 +38,7 @@ class Taste(
     }
 }
 
-/** Watch progress, "Verder kijken", next/new episodes, Mijn lijst and thumbs. */
+/** Watch progress, "Continue watching", next/new episodes, My List and thumbs. */
 class Library(private val db: AppDatabase, private val catalog: Catalog) {
     private val dao get() = db.library()
     val version = MutableStateFlow(0)
@@ -57,13 +59,13 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
 
     private fun episodeRow(e: EpisodeEntity, positionMs: Long, durationMs: Long) = ProgressEntity(
         contentId = "e:${e.id}", titleKey = e.titleKey, episodeId = e.id, season = e.season, number = e.number,
-        label = "S${e.season} · A${e.number} · ${e.name}", image = e.image, streamId = null, container = e.container,
+        label = Texts.get(R.string.episode_line, e.season, e.number, e.name), image = e.image, streamId = null, container = e.container,
         positionMs = positionMs, durationMs = durationMs, finished = false, updatedAt = 0,
     )
 
     private suspend fun save(p: ProgressEntity) = withContext(Dispatchers.IO) {
         val dur = p.durationMs.coerceAtLeast(0)
-        // Under a minute in: not worth a "Verder kijken" tile yet.
+        // Under a minute in: not worth a "Continue watching" tile yet.
         if (p.positionMs < 60_000 && dao.progress(p.contentId) == null) return@withContext
         val finished = dur > 0 && (p.positionMs >= dur * 0.93 || dur - p.positionMs < 120_000 && dur > 600_000)
         dao.saveProgress(p.copy(durationMs = dur, finished = finished, updatedAt = System.currentTimeMillis()))
@@ -71,7 +73,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
         changed()
     }
 
-    /** Finishing an episode puts the next one in "Verder kijken". */
+    /** Finishing an episode puts the next one in "Continue watching". */
     private suspend fun queueNext(titleKey: String, finishedId: String) {
         val next = nextEpisode(titleKey, finishedId) ?: return
         if (dao.progress("e:${next.id}") == null) {
@@ -86,7 +88,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
 
     /**
      * After a catalog refresh: every series we are fully caught up on gets its episode list re-checked,
-     * so a newly released episode shows up in "Verder kijken" by itself.
+     * so a newly released episode shows up in "Continue watching" by itself.
      */
     suspend fun refreshNextUp() = withContext(Dispatchers.IO) {
         val bySeries = dao.recentProgress(400).filter { it.episodeId != null }.groupBy { it.titleKey }
@@ -99,7 +101,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
             val next = eps.firstOrNull { it.season * 10_000 + it.number > (last.season ?: 0) * 10_000 + (last.number ?: 0) } ?: continue
             if (dao.progress("e:${next.id}") != null) continue
             dao.saveProgress(episodeRow(next, 0, next.durationSecs * 1000).copy(
-                label = "Nieuwe aflevering · S${next.season} A${next.number}", updatedAt = System.currentTimeMillis(),
+                label = nl.boschtv.tv.ui.Texts.get(nl.boschtv.tv.R.string.new_episode, next.season, next.number), updatedAt = System.currentTimeMillis(),
             ))
             added = true
         }
@@ -121,14 +123,14 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
 
     private fun remaining(p: ProgressEntity): String? {
         val left = (p.durationMs - p.positionMs) / 60_000
-        return if (p.durationMs > 0 && left > 0) "Nog $left min" else null
+        return if (p.durationMs > 0 && left > 0) Texts.get(R.string.min_left_short, left.toInt()) else null
     }
 
     suspend fun rawContinue(limit: Int): List<ProgressEntity> = withContext(Dispatchers.IO) {
         dao.recentProgress(300).filter { !it.finished }.distinctBy { it.titleKey }.take(limit)
     }
 
-    /** Where "Afspelen" on a series should start: the unfinished episode, else the one after the last watched. */
+    /** Where "Play" on a series should start: the unfinished episode, else the one after the last watched. */
     suspend fun resumePoint(titleKey: String): Pair<EpisodeEntity, Long>? = withContext(Dispatchers.IO) {
         val eps = catalog.episodes(titleKey)
         if (eps.isEmpty()) return@withContext null
@@ -195,4 +197,4 @@ class Library(private val db: AppDatabase, private val catalog: Catalog) {
     }
 }
 
-val Card.kindLabel get() = if (kind == KIND_MOVIE) "Film" else "Serie"
+val Card.kindLabel get() = nl.boschtv.tv.ui.Texts.get(if (kind == KIND_MOVIE) nl.boschtv.tv.R.string.kind_movie else nl.boschtv.tv.R.string.kind_series)

@@ -1,5 +1,7 @@
 package nl.boschtv.tv.data
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import androidx.compose.runtime.Immutable
 import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
@@ -34,7 +36,7 @@ fun TitleEntity.toCard() = Card(
     key, kind, name, year, poster, dBackdrop ?: pBackdrop, rating, genres, services, flags, lang, addedTs, dPlot ?: pPlot,
 )
 
-enum class Sort(val label: String) { NEW("Nieuwste"), RATING("Best beoordeeld"), YEAR("Jaar"), AZ("A–Z"), TOP("Populair") }
+enum class Sort { NEW, RATING, YEAR, AZ, TOP }
 
 /** Declarative catalog filter; the single place SQL for title lists is built. */
 @Immutable
@@ -134,11 +136,11 @@ class Catalog(
     }
 
     fun versions(t: TitleEntity): List<Version> = buildList {
-        add(Version(t.sourceId, t.container, if (t.lang == 0) "Origineel" else "Engels"))
+        add(Version(t.sourceId, t.container, if (t.lang == 0) "original" else "en"))
         t.alts?.lines()?.forEach { line ->
             val p = line.split(';')
             val id = p.getOrNull(0)?.toLongOrNull() ?: return@forEach
-            add(Version(id, p.getOrNull(1)?.ifBlank { null }, p.getOrNull(2) ?: "Andere versie"))
+            add(Version(id, p.getOrNull(1)?.ifBlank { null }, p.getOrNull(2) ?: "other"))
         }
     }
 
@@ -189,7 +191,7 @@ class Catalog(
                 val info = e.obj("info")
                 out += EpisodeEntity(
                     id = id, titleKey = t.key, season = e.int("season") ?: seasonHint, number = number,
-                    name = Titles.episode(e.str("title"), number), container = e.str("container_extension"),
+                    name = Titles.episode(e.str("title"), number) { Texts.get(R.string.episode_n, it) }, container = e.str("container_extension"),
                     durationSecs = info?.long("duration_secs") ?: 0L,
                     image = info?.str("movie_image") ?: info?.str("cover_big"),
                     plot = info?.str("plot")?.take(500),

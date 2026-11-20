@@ -1,0 +1,14 @@
+name: Provider not read well
+description: Categories, languages or genres from your provider are missed or wrong
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: What goes wrong
+      description: For example "German films are missing" or "the cinema row stays empty".
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Category names
+      description: Paste the relevant lines from `tools/provider-report.sh` (category names only). Never post your login or server address.

@@ -66,7 +66,7 @@ class Prefs(private val context: Context) {
     suspend fun lastSync(): Long = lastSync.first()
 
     suspend fun saveSource(s: Source) = context.store.edit {
-        // First login on this TV: start from the TV's own language (changeable in Instellingen).
+        // First login on this TV: start from the TV's own language (changeable in Settings).
         // Installs from before this setting existed have no value and stay Dutch.
         if (it[K.HOME_LANGUAGE] == null && it[K.HOST].isNullOrEmpty()) it[K.HOME_LANGUAGE] = nl.boschtv.tv.core.Language.ofDevice().name
         it[K.HOST] = s.host; it[K.USER] = s.username; it[K.PASS] = s.password

@@ -97,12 +97,12 @@ object Titles {
     fun channel(raw: String): String =
         spaces.replace(junk.replace(square.replace(Tags.strip(raw), " "), " "), " ").trim().ifBlank { raw.trim() }
 
-    /** "┃NL┃ Show (2026) - S01E02 - De titel" -> "De titel". */
-    fun episode(raw: String?, number: Int): String {
+    /** "┃NL┃ Show (2026) - S01E02 - The title" -> "The title"; [fallback] when there is none. */
+    fun episode(raw: String?, number: Int, fallback: (Int) -> String = { "Episode $it" }): String {
         val base = raw.orEmpty()
         val tail = if (episodeCode.containsMatchIn(base)) episodeCode.replace(base, "") else clean(base).name
         val t = spaces.replace(junk.replace(tail, " "), " ").trim()
-        return t.ifBlank { "Aflevering $number" }
+        return t.ifBlank { fallback(number) }
     }
 
     /** Lower-case, accent-free, alphanumeric form used for search and de-duplication. */

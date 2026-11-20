@@ -1,5 +1,8 @@
 package nl.boschtv.tv.player
 
+import nl.boschtv.tv.ui.Texts
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -140,7 +143,7 @@ class PlayerActivity : ComponentActivity() {
                         delay(1200L * retries)
                         if (onScreen && !released) { player.prepare(); player.seekTo(at); player.play() }
                     }
-                } else ui.error = "Afspelen lukt niet. Controleer je verbinding of probeer een andere versie."
+                } else ui.error = Texts.get(R.string.play_failed)
             }
         })
         setContent { BoschTheme { VodScreen(player, ui, ::toggle, ::restart, ::playNext, { scrub(it > 0, 0) }) { finish() } } }
@@ -183,7 +186,7 @@ class PlayerActivity : ComponentActivity() {
     private suspend fun startEpisode(ep: EpisodeEntity, positionMs: Long) {
         episode = ep
         ui.title = title?.name.orEmpty()
-        ui.subtitle = "S${ep.season} · A${ep.number} · ${ep.name}"
+        ui.subtitle = Texts.get(R.string.episode_line, ep.season, ep.number, ep.name)
         ui.next = c.library.nextEpisode(ep.titleKey, ep.id)
         start(c.prefs.source().episode(ep.id, ep.container), positionMs)
     }
@@ -280,7 +283,7 @@ class PlayerActivity : ComponentActivity() {
             (0 until g.length).filter { g.isTrackSupported(it) }.map { i ->
                 val f = g.getTrackFormat(i)
                 val lang = f.language?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale("nl")) }?.replaceFirstChar(Char::uppercase)
-                val label = listOfNotNull(lang ?: f.label ?: "Spoor ${i + 1}", f.label?.takeIf { lang != null && it != lang }).joinToString(" · ")
+                val label = listOfNotNull(lang ?: f.label ?: Texts.get(R.string.track_n, i + 1), f.label?.takeIf { lang != null && it != lang }).joinToString(" · ")
                 TrackOption(label, g.isTrackSelected(i)) {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .setTrackTypeDisabled(type, false)
@@ -290,7 +293,7 @@ class PlayerActivity : ComponentActivity() {
         }
         ui.audio = options(C.TRACK_TYPE_AUDIO)
         val text = options(C.TRACK_TYPE_TEXT)
-        ui.text = if (text.isEmpty()) emptyList() else listOf(TrackOption("Uit", text.none { it.selected }) {
+        ui.text = if (text.isEmpty()) emptyList() else listOf(TrackOption(Texts.get(R.string.off), text.none { it.selected }) {
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
         }) + text
     }
@@ -382,17 +385,17 @@ private fun VodScreen(
                 ui.error?.let {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(it, style = MaterialTheme.typography.titleLarge, color = Ink.Text)
-                        Pill("Terug", onClose, primary = true)
+                        Pill(stringResource(R.string.back), onClose, primary = true)
                     }
                 }
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 48.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     SeekBar(ui, onSeek)
                     if (!ui.scrubbing) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Pill(if (ui.playing) "Pauze" else "Afspelen", onToggle, Modifier.focusRequester(playFocus), primary = true,
+                        Pill(stringResource(if (ui.playing) R.string.pause else R.string.play), onToggle, Modifier.focusRequester(playFocus), primary = true,
                             icon = if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow)
-                        Pill("Vanaf begin", onRestart, icon = Icons.Rounded.Replay, selected = true)
-                        if (ui.text.isNotEmpty() || ui.audio.size > 1) Pill("Ondertiteling en audio", { ui.tracksOpen = true }, icon = Icons.Rounded.Subtitles, selected = true)
-                        if (ui.next != null) Pill(if (ui.nearEnd) "Volgende aflevering over ${((ui.duration - ui.position) / 1000).coerceAtLeast(0)} s" else "Volgende aflevering", onNext, Modifier.focusRequester(nextFocus), icon = Icons.Rounded.SkipNext, selected = true)
+                        Pill(stringResource(R.string.from_start), onRestart, icon = Icons.Rounded.Replay, selected = true)
+                        if (ui.text.isNotEmpty() || ui.audio.size > 1) Pill(stringResource(R.string.subs_audio), { ui.tracksOpen = true }, icon = Icons.Rounded.Subtitles, selected = true)
+                        if (ui.next != null) Pill(if (ui.nearEnd) stringResource(R.string.next_ep_in, ((ui.duration - ui.position) / 1000).coerceAtLeast(0).toInt()) else stringResource(R.string.next_episode), onNext, Modifier.focusRequester(nextFocus), icon = Icons.Rounded.SkipNext, selected = true)
                     }
                 }
             }
@@ -448,14 +451,14 @@ private fun TrackPanel(ui: VodUi, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (ui.text.isNotEmpty()) {
-            item { Text("Ondertiteling", style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(bottom = 6.dp)) }
+            item { Text(stringResource(R.string.subtitles), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(bottom = 6.dp)) }
             items(ui.text.size) { i ->
                 val o = ui.text[i]
                 Pill(o.label, { o.select(); ui.tracksOpen = false }, Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier), selected = o.selected)
             }
         }
         if (ui.audio.isNotEmpty()) {
-            item { Text("Audio", style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)) }
+            item { Text(stringResource(R.string.audio), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)) }
             items(ui.audio.size) { i ->
                 val o = ui.audio[i]
                 Pill(o.label, { o.select(); ui.tracksOpen = false }, Modifier.fillMaxWidth().then(if (i == 0 && ui.text.isEmpty()) Modifier.focusRequester(first) else Modifier), selected = o.selected)

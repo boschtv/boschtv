@@ -1,5 +1,7 @@
 package nl.boschtv.tv.data
 
+import nl.boschtv.tv.R
+import nl.boschtv.tv.ui.Texts
 import android.content.Context
 import androidx.room.withTransaction
 import androidx.work.Constraints
@@ -52,7 +54,7 @@ private class Candidate(
 ) {
     val alts = LinkedHashMap<String, String>()   // label -> "id;ext;label"
     val score get() = lang * 100 + (if (dubbed) 10 else 0) + (if (quality != null) 1 else 0)
-    val altLabel get() = when { dubbed -> "Nederlands gesproken"; else -> quality }
+    val altLabel get() = when { dubbed -> "dub"; else -> quality }
 }
 
 class SyncManager(
@@ -83,7 +85,7 @@ class SyncManager(
             result.onSuccess { state.value = SyncState.Idle; onChanged(); version.value++ }
             result.onFailure { e ->
                 if (e is AuthException) prefs.setProblem(e.message)
-                state.value = SyncState.Failed(e.message ?: "Synchroniseren mislukt")
+                state.value = SyncState.Failed(e.message ?: Texts.get(R.string.sync_failed))
             }
             result
         }
@@ -99,20 +101,20 @@ class SyncManager(
         if (items.size < 500) return
         val before = db.catalog().missingPosterPercent(kind) ?: return   // first sync: nothing to compare with
         val now = items.count { it.poster.isNullOrBlank() } * 100 / items.size
-        if (now > before + 25) throw IllegalStateException("De aanbieder gaf een onvolledige lijst; later opnieuw.")
+        if (now > before + 25) throw IllegalStateException(Texts.get(R.string.incomplete_list))
     }
 
     private fun step(p: Float, msg: String) { state.value = SyncState.Running(p, msg) }
 
     private suspend fun run(src: Source) {
-        step(0.02f, "Verbinden…")
+        step(0.02f, Texts.get(R.string.step_connect))
         val account = client.account(src)
         prefs.saveAccount(account)
         if (!account.active) throw AuthException(account.message)
         val content = prefs.content()
         val gen = System.currentTimeMillis()
 
-        step(0.06f, "Indeling ophalen…")
+        step(0.06f, Texts.get(R.string.step_categories))
         val vodCats = client.categories(src, "get_vod_categories")
         val seriesCats = client.categories(src, "get_series_categories")
         val liveCats = client.categories(src, "get_live_categories")
@@ -122,22 +124,22 @@ class SyncManager(
         val vodInfo = vodCats.associate { it.id to Categories.classify(it.name, false, content, profile) }
         val seriesInfo = seriesCats.associate { it.id to Categories.classify(it.name, false, content, profile) }
 
-        step(0.12f, "Films ophalen…")
+        step(0.12f, Texts.get(R.string.step_movies))
         val movies = collect(src, "get_vod_streams", KIND_MOVIE, vodInfo, content)
         complete(movies, KIND_MOVIE)
-        step(0.5f, "Films opslaan…")
+        step(0.5f, Texts.get(R.string.step_save_movies))
         store(movies, gen)
 
-        step(0.55f, "Series ophalen…")
+        step(0.55f, Texts.get(R.string.step_series))
         val series = collect(src, "get_series", KIND_SERIES, seriesInfo, content)
         complete(series, KIND_SERIES)
-        step(0.82f, "Series opslaan…")
+        step(0.82f, Texts.get(R.string.step_save_series))
         store(series, gen)
 
-        step(0.86f, "Tv-zenders ophalen…")
+        step(0.86f, Texts.get(R.string.step_channels))
         val channelCount = syncChannels(src, liveCats.map { it.id }, liveInfo, gen, content)
 
-        step(0.97f, "Afronden…")
+        step(0.97f, Texts.get(R.string.step_finish))
         db.withTransaction {
             db.catalog().pruneTitles(gen)
             db.catalog().refreshGenres()
@@ -148,19 +150,19 @@ class SyncManager(
         prefs.saveSyncReport(report(profile, vodInfo.values + seriesInfo.values, liveInfo.values, movies + series, channelCount))
     }
 
-    /** "1.204 van 1.402 categorieën gebruikt · 92% van de titels heeft een genre · …" for Instellingen. */
+    /** "1,204 of 1,402 categories used · 92% with a genre · …" for Settings. */
     private fun report(profile: ProviderProfile, vod: Collection<CategoryInfo>, live: Collection<CategoryInfo>, titles: Collection<Candidate>, channels: Int): String {
         val all = vod + live
         val used = all.count { it.lang != null }
         val withGenre = if (titles.isEmpty()) 0 else titles.count { it.genres != 0L } * 100 / titles.size
         val services = vod.count { it.lang != null && it.services != 0L }
-        val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale("nl"))
+        val nf = java.text.NumberFormat.getIntegerInstance()
         return buildList {
-            add("${nf.format(used)} van ${nf.format(all.size)} categorieën gebruikt")
-            add(if (profile.labelsLanguages) "talen herkend" else "aanbieder noemt geen talen: alles getoond")
-            add("${nf.format(titles.size)} titels, $withGenre% met genre")
-            add("${nf.format(channels)} zenders")
-            if (services == 0) add("geen streamingdiensten herkend")
+            add(Texts.get(R.string.report_categories, nf.format(used), nf.format(all.size)))
+            add(Texts.get(if (profile.labelsLanguages) R.string.report_langs else R.string.report_no_langs))
+            add(Texts.get(R.string.report_titles, nf.format(titles.size), withGenre))
+            add(Texts.get(R.string.report_channels, nf.format(channels)))
+            if (services == 0) add(Texts.get(R.string.report_no_services))
         }.joinToString(" · ")
     }
 
@@ -215,7 +217,7 @@ class SyncManager(
         return out.values
     }
 
-    private val ENGLISH = "Engels gesproken"
+    private val ENGLISH = "en"
 
     /** Same title seen again (other category, other language, other quality): keep the best, merge signals. */
     private fun merge(a: Candidate, b: Candidate) {
@@ -285,7 +287,7 @@ class SyncManager(
         var sort = 0
         groupIds.forEachIndexed { gi, gid ->
             val info = cats.getValue(gid)
-            val prefix = when (info.lang) { Lang.REGIONAL -> "België · "; Lang.EN -> "Engels · "; else -> "" }
+            val prefix = when (info.lang) { Lang.REGIONAL -> Texts.get(R.string.group_regional); Lang.EN -> Texts.get(R.string.group_english); else -> "" }
             groups += ChannelGroupEntity(gid, prefix + info.label, gi)
             byGroup.getValue(gid).forEachIndexed { i, o ->
                 val id = o.long("stream_id") ?: return@forEachIndexed

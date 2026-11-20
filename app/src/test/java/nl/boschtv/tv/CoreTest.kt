@@ -35,7 +35,7 @@ class CoreTest {
         assertTrue(Titles.isDivider("☰☰☰☰ ┃NL┃ JEUGD PAKKET HD ☰☰☰☰"))
         assertFalse(Titles.isDivider("┃NL┃ RTL 4 HD"))
         assertEquals("Aflevering 1", Titles.episode("┃NL┃ The Altruists (2026) - S01E01 - Aflevering 1", 1))
-        assertEquals("Aflevering 3", Titles.episode("┃NL┃ Show - S01E03", 3))
+        assertEquals("Episode 3", Titles.episode("┃NL┃ Show - S01E03", 3))
     }
 
     @Test fun readsCategories() {

@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import nl.boschtv.tv.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,19 +50,27 @@ private const val PAGE = 60
 
 private val thisYear = java.time.Year.now().value
 /** Label, first year, last year. Combines with kind, sort and genres. */
-private val yearChoices: List<Triple<String, Int?, Int?>> = listOf(
-    Triple("Alle jaren", null, null),
-    Triple("$thisYear", thisYear, thisYear),
-    Triple("${thisYear - 1}", thisYear - 1, thisYear - 1),
-    Triple("${thisYear - 2}", thisYear - 2, thisYear - 2),
-    Triple("2020 – ${thisYear - 3}", 2020, thisYear - 3),
-    Triple("Jaren 10", 2010, 2019),
-    Triple("Jaren 00", 2000, 2009),
-    Triple("Jaren 90", 1990, 1999),
-    Triple("Ouder", null, 1989),
+private val yearChoices: List<Triple<Int, Int?, Int?>> = listOf(
+    Triple(R.string.all_years, null, null),
+    Triple(-thisYear, thisYear, thisYear),
+    Triple(-(thisYear - 1), thisYear - 1, thisYear - 1),
+    Triple(-(thisYear - 2), thisYear - 2, thisYear - 2),
+    Triple(0, 2020, thisYear - 3),
+    Triple(R.string.years_2010s, 2010, 2019),
+    Triple(R.string.years_2000s, 2000, 2009),
+    Triple(R.string.years_1990s, 1990, 1999),
+    Triple(R.string.older, null, 1989),
 )
 
-/** A full grid of titles: "Alles bekijken", Genres, Mijn lijst. With [BrowseArgs.filters] it has a filter rail. */
+/** Year choice label: a string resource, a single year stored as its negative, or 0 for "2020 – <three years ago>". */
+@Composable
+private fun yearText(label: Int): String = when {
+    label < 0 -> "${-label}"
+    label == 0 -> "2020 – ${thisYear - 3}"
+    else -> stringResource(label)
+}
+
+/** A full grid of titles: "See all", Genres, My List. With [BrowseArgs.filters] it has a filter rail. */
 @Composable
 fun BrowseScreen(args: BrowseArgs, nav: Nav, focus: FocusRequester, fixed: List<Card>? = null) {
     val c = rememberContainer()
@@ -90,8 +100,8 @@ fun BrowseScreen(args: BrowseArgs, nav: Nav, focus: FocusRequester, fixed: List<
         runCatching { heads.getValue(id).requestFocus() }
         query = change(query).copy(offset = 0); open = null
     }
-    val kindLabel = when (query.kind) { KIND_MOVIE -> "Films"; KIND_SERIES -> "Series"; else -> "Alles" }
-    val yearLabel = yearChoices.firstOrNull { it.second == query.minYear && it.third == query.maxYear }?.first ?: "Alle jaren"
+    val kindLabel = stringResource(when (query.kind) { KIND_MOVIE -> R.string.tab_movies; KIND_SERIES -> R.string.tab_series; else -> R.string.everything })
+    val yearLabel = yearText(yearChoices.firstOrNull { it.second == query.minYear && it.third == query.maxYear }?.first ?: R.string.all_years)
 
     Row(Modifier.fillMaxSize().padding(top = 84.dp)) {
         if (args.filters) LazyColumn(
@@ -101,41 +111,41 @@ fun BrowseScreen(args: BrowseArgs, nav: Nav, focus: FocusRequester, fixed: List<
         ) {
             // Each filter is one line showing its current choice; OK opens it. Genres start open,
             // because that is what this page is for, and the remote starts on the first genre.
-            item { FilterHeader("Soort", kindLabel, open == "kind", Modifier.focusRequester(heads.getValue("kind"))) { toggle("kind") } }
+            item { FilterHeader(stringResource(R.string.filter_kind), kindLabel, open == "kind", Modifier.focusRequester(heads.getValue("kind"))) { toggle("kind") } }
             if (open == "kind") {
-                item { Pill("Alles", { pick("kind") { it.copy(kind = null) } }, Modifier.fillMaxWidth(), selected = query.kind == null) }
-                item { Pill("Films", { pick("kind") { it.copy(kind = KIND_MOVIE) } }, Modifier.fillMaxWidth(), selected = query.kind == KIND_MOVIE) }
-                item { Pill("Series", { pick("kind") { it.copy(kind = KIND_SERIES) } }, Modifier.fillMaxWidth(), selected = query.kind == KIND_SERIES) }
+                item { Pill(stringResource(R.string.everything), { pick("kind") { it.copy(kind = null) } }, Modifier.fillMaxWidth(), selected = query.kind == null) }
+                item { Pill(stringResource(R.string.tab_movies), { pick("kind") { it.copy(kind = KIND_MOVIE) } }, Modifier.fillMaxWidth(), selected = query.kind == KIND_MOVIE) }
+                item { Pill(stringResource(R.string.tab_series), { pick("kind") { it.copy(kind = KIND_SERIES) } }, Modifier.fillMaxWidth(), selected = query.kind == KIND_SERIES) }
             }
-            item { FilterHeader("Sorteren", query.sort.label, open == "sort", Modifier.focusRequester(heads.getValue("sort"))) { toggle("sort") } }
+            item { FilterHeader(stringResource(R.string.filter_sort), query.sort.title(), open == "sort", Modifier.focusRequester(heads.getValue("sort"))) { toggle("sort") } }
             if (open == "sort") items(listOf(Sort.NEW, Sort.RATING, Sort.YEAR, Sort.AZ)) { o ->
-                Pill(o.label, { pick("sort") { it.copy(sort = o, dutchFirst = o == Sort.NEW) } }, Modifier.fillMaxWidth(), selected = query.sort == o)
+                Pill(o.title(), { pick("sort") { it.copy(sort = o, dutchFirst = o == Sort.NEW) } }, Modifier.fillMaxWidth(), selected = query.sort == o)
             }
-            item { FilterHeader("Jaar", yearLabel, open == "year", Modifier.focusRequester(heads.getValue("year"))) { toggle("year") } }
+            item { FilterHeader(stringResource(R.string.filter_year), yearLabel, open == "year", Modifier.focusRequester(heads.getValue("year"))) { toggle("year") } }
             if (open == "year") items(yearChoices) { (label, from, to) ->
-                Pill(label, { pick("year") { it.copy(minYear = from, maxYear = to) } }, Modifier.fillMaxWidth(),
+                Pill(yearText(label), { pick("year") { it.copy(minYear = from, maxYear = to) } }, Modifier.fillMaxWidth(),
                     selected = query.minYear == from && query.maxYear == to)
             }
             item {
                 val n = java.lang.Long.bitCount(query.genresAll)
-                FilterHeader("Genres", if (n == 0) "Alle" else "$n gekozen", open == "genres", Modifier.focusRequester(heads.getValue("genres"))) { toggle("genres") }
+                FilterHeader(stringResource(R.string.filter_genres), if (n == 0) stringResource(R.string.everything) else stringResource(R.string.n_chosen, n), open == "genres", Modifier.focusRequester(heads.getValue("genres"))) { toggle("genres") }
             }
             if (open == "genres") listItemsIndexed(Genre.entries) { i, g ->
                 val on = query.genresAll and g.bit != 0L
-                Pill(g.label, { query = query.copy(genresAll = query.genresAll xor g.bit, offset = 0) },
+                Pill(g.title(), { query = query.copy(genresAll = query.genresAll xor g.bit, offset = 0) },
                     if (i == 0) Modifier.fillMaxWidth().focusRequester(firstFilter) else Modifier.fillMaxWidth(), selected = on)
             }
         }
         Column(Modifier.fillMaxSize()) {
             val genres = Genre.of(query.genresAll).joinToString(" + ") { it.label }
             val service = Service.of(query.services).firstOrNull()?.label
-            val years = yearChoices.firstOrNull { it.second == query.minYear && it.third == query.maxYear && (it.second != null || it.third != null) }?.first
-            val heading = if (args.filters) listOfNotNull(genres.ifBlank { "Alle genres" }, years, service).joinToString(" · ") else args.title
+            val years = yearChoices.firstOrNull { it.second == query.minYear && it.third == query.maxYear && (it.second != null || it.third != null) }?.first?.let { yearText(it) }
+            val heading = if (args.filters) listOfNotNull(genres.ifBlank { stringResource(R.string.all_genres) }, years, service).joinToString(" · ") else args.title
             Row(Modifier.padding(start = if (args.filters) 12.dp else EDGE, bottom = 12.dp)) {
                 Text(heading, style = MaterialTheme.typography.headlineLarge, color = Ink.Text)
-                if (total >= 0) Text("   $total titels", style = MaterialTheme.typography.titleMedium, color = Ink.Muted, modifier = Modifier.padding(top = 12.dp))
+                if (total >= 0) Text("   " + androidx.compose.ui.res.pluralStringResource(R.plurals.n_titles, total, total), style = MaterialTheme.typography.titleMedium, color = Ink.Muted, modifier = Modifier.padding(top = 12.dp))
             }
-            if (total == 0) Text("Niets gevonden met deze keuze.", style = MaterialTheme.typography.titleLarge, color = Ink.Muted,
+            if (total == 0) Text(stringResource(R.string.nothing_found_filter), style = MaterialTheme.typography.titleLarge, color = Ink.Muted,
                 modifier = Modifier.padding(start = if (args.filters) 12.dp else EDGE))
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(POSTER_W),

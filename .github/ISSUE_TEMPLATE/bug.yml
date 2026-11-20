@@ -1,0 +1,20 @@
+name: Bug
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Device and app version
+      description: For example "Chromecast with Google TV (4K), BoschTV 2.4.0" (Settings → App).
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Anything else
+      description: Screenshots, how often it happens. Never post your IPTV login or server address.
