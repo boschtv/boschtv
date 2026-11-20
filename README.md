@@ -50,14 +50,6 @@ New versions are offered by the app itself (Settings → Check for updates).
 
 The app's own texts are Dutch for now; see the roadmap.
 
-### Your own service logos
-
-The streaming-service logos come from TMDB. To use your own instead (for example for a service TMDB
-does not have), put a square image (about 256×256; PNG, WebP, JPG or SVG) in
-`app/src/main/assets/icons/` before building, named after the service in lower case as it appears in
-`Service` in `app/src/main/java/nl/boschtv/tv/core/Taxonomy.kt`. The folder is ignored by git, so your
-files stay yours.
-
 ## Working on it
 
 [CONTRIBUTING.md](CONTRIBUTING.md) walks through building, running on an emulator or your TV, how the
