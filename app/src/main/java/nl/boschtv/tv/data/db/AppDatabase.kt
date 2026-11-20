@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         FavoriteEntity::class, ProgrammeEntity::class, ProgressEntity::class, MyListEntity::class,
         RatingEntity::class, TrendEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +26,11 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(object : androidx.room.migration.Migration(3, 4) {
                     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                         db.execSQL("CREATE TABLE IF NOT EXISTS `trending` (`listId` TEXT NOT NULL, `rank` INTEGER NOT NULL, `titleKey` TEXT NOT NULL, PRIMARY KEY(`listId`, `rank`))")
+                    }
+                }, object : androidx.room.migration.Migration(4, 5) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `titles` ADD COLUMN `lPlot` TEXT")
+                        db.execSQL("ALTER TABLE `titles` ADD COLUMN `lPlotLocale` TEXT")
                     }
                 })
                 .fallbackToDestructiveMigration()

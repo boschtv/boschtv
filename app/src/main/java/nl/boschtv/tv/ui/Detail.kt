@@ -98,6 +98,8 @@ fun DetailScreen(key: String, nav: Nav) {
         episodes = c.catalog.episodes(key)
         if (attempt == 0) { delay(80); runCatching { playFocus.requestFocus() } }
         title = c.catalog.detail(key) ?: title          // then plot, cast and a fresh episode list
+        // The provider's description is often English only: TMDB may have it in the viewer's language.
+        if (title?.lPlotLocale != c.prefs.content().home.locale && c.trends.localizePlot(key)) title = c.catalog.title(key) ?: title
         episodes = c.catalog.episodes(key)
         loading = false
         title?.let { similar = c.recommender.similar(it.toCard()) }
@@ -138,7 +140,7 @@ fun DetailScreen(key: String, nav: Nav) {
                         t.rating.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
                         genreLine(t.genres).ifBlank { null },
                     ))
-                    Text(t.dPlot ?: t.pPlot ?: if (loading) "" else stringResource(R.string.no_description), style = MaterialTheme.typography.bodyLarge,
+                    Text(t.lPlot ?: t.dPlot ?: t.pPlot ?: if (loading) "" else stringResource(R.string.no_description), style = MaterialTheme.typography.bodyLarge,
                         color = Ink.Soft, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(66.dp))
                     t.actors?.let { Text(stringResource(R.string.with_cast, it), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 

@@ -33,7 +33,7 @@ data class Card(
 
 fun TitleRow.toCard() = Card(key, kind, name, year, poster, backdrop, rating, genres, services, flags, lang, addedTs, plot)
 fun TitleEntity.toCard() = Card(
-    key, kind, name, year, poster, dBackdrop ?: pBackdrop, rating, genres, services, flags, lang, addedTs, dPlot ?: pPlot,
+    key, kind, name, year, poster, dBackdrop ?: pBackdrop, rating, genres, services, flags, lang, addedTs, lPlot ?: dPlot ?: pPlot,
 )
 
 enum class Sort { NEW, RATING, YEAR, AZ, TOP }
