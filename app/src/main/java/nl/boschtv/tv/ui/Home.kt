@@ -119,6 +119,16 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
     var rows by remember(kind, service) { mutableStateOf<List<HomeRow>?>(null) }
     var focused by remember(kind, service) { mutableStateOf<Card?>(null) }
     val first = remember { FocusRequester() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Back deep inside the rows returns to the top row first, as the big streaming apps do. Focus goes
+    // to the first tile explicitly: the tile that had it scrolls out of view and would take focus along.
+    androidx.activity.compose.BackHandler(enabled = active && listState.firstVisibleItemIndex > 0) {
+        scope.launch {
+            listState.scrollToItem(0)
+            delay(60)
+            runCatching { first.requestFocus() }
+        }
+    }
     // Where to land when focus comes back into the rows (from the top bar, a detail page, the player):
     // the tile you were on if it is still there, otherwise the first one.
     val restore = remember { FocusRequester() }
@@ -147,6 +157,7 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
                         target.startsWith(r.id + "/") && (r.cards.any { "${r.id}/${it.key}" == target } || r.services.any { "${r.id}/${it.name}" == target })
                     }
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize().focusRequester(focus)
                             .focusProperties { enter = { if (stillThere) restore else first } }.focusGroup(),
                         contentPadding = PaddingValues(bottom = railsHeight - 60.dp),
