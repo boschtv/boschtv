@@ -1,7 +1,7 @@
 # Roadmap
 
 Where BoschTV is heading. Concrete bugs and small improvements live in
-[GitHub Issues](https://github.com/florisbosch/boschtv/issues); this page is about direction.
+[GitHub Issues](https://github.com/boschtv/boschtv/issues); this page is about direction.
 Suggestions are welcome as an issue.
 
 ## Now

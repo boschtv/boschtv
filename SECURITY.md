@@ -7,5 +7,5 @@ Worth reporting, for example: anything that exposes a user's IPTV login, lets an
 the network read or change BoschTV's data, or gets an update installed that did not come from the
 official releases.
 
-Official releases are only published at https://github.com/florisbosch/boschtv/releases and are signed
+Official releases are only published at https://github.com/boschtv/boschtv/releases and are signed
 with a key that never leaves the maintainer's machine. Android refuses updates signed with any other key.

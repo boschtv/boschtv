@@ -121,7 +121,7 @@ fun SettingsScreen(focus: FocusRequester) {
 
             Heading("App")
             Info("Versie", nl.boschtv.tv.BuildConfig.VERSION_NAME)
-            Text("Open source (MIT) · github.com/florisbosch/boschtv · licenties van gebruikte software staan daar.",
+            Text("Open source (MIT) · github.com/boschtv/boschtv · licenties van gebruikte software staan daar.",
                 style = MaterialTheme.typography.bodySmall, color = Ink.Muted)
             // Required by TMDB's API terms.
             Text("Gebruikt de TMDB API, maar is niet goedgekeurd of gecertificeerd door TMDB. Gegevens over streamingdiensten: JustWatch.",

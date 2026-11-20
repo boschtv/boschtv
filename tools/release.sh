@@ -6,7 +6,7 @@
 #   tools/release.sh 2.3.0 "…" --own-logos            also put your own logo files (app/src/main/assets/icons)
 #                                                     in the public app; by default releases use TMDB's logos only
 #
-# Publishes to the GitHub repo in RELEASE_REPO (default florisbosch/boschtv) as release
+# Publishes to the GitHub repo in RELEASE_REPO (default boschtv/boschtv) as release
 # v<version>, with two files: boschtv.apk and update.json. The app reads
 #   https://github.com/<repo>/releases/latest/download/update.json
 # so local.properties needs:  update.url=https://github.com/<repo>/releases/latest/download/update.json
@@ -17,7 +17,7 @@ NAME="${1:?Usage: tools/release.sh <version, e.g. 2.3.0> <release notes> [--dry-
 NOTES="${2:-}"
 DRY=""; OWN=""
 for a in "${@:3}"; do case "$a" in --dry-run) DRY="$a" ;; --own-logos) OWN="$a" ;; *) echo "Unknown option: $a" >&2; exit 1 ;; esac; done
-REPO="${RELEASE_REPO:-florisbosch/boschtv}"
+REPO="${RELEASE_REPO:-boschtv/boschtv}"
 
 : "${JAVA_HOME:=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 : "${ANDROID_HOME:=/opt/homebrew/share/android-commandlinetools}"

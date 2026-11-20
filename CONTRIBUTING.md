@@ -21,7 +21,7 @@ On Linux or Windows, Android Studio installs the same pieces.
 ## 2. Build and test
 
 ```bash
-git clone https://github.com/florisbosch/boschtv && cd boschtv
+git clone https://github.com/boschtv/boschtv && cd boschtv
 ./gradlew :app:testDebugUnitTest      # the rules for reading catalogs (fast, no device)
 ./gradlew :app:assembleRelease        # app/build/outputs/apk/release/app-release.apk
 ```
