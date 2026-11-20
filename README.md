@@ -16,7 +16,7 @@ On a Google TV, without a computer:
 1. Install **Downloader** from the Play Store.
 2. Settings → System → About → press *Android TV OS build* seven times (turns on developer options).
 3. Settings → Apps → Security & restrictions → Unknown sources → switch on **Downloader**.
-4. Open Downloader, type the code **6401661** in the address field and press Go. Confirm the install.
+4. Open Downloader, type the code **9379736** in the address field and press Go. Confirm the install.
    (Without the code: `https://github.com/boschtv/boschtv/releases/latest/download/boschtv.apk`)
 5. Open BoschTV and log in, on the TV or by scanning the QR code with your phone.
 
