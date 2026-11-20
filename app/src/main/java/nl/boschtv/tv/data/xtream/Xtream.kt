@@ -20,9 +20,13 @@ data class Source(val host: String = "", val username: String = "", val password
 
     fun live(streamId: Long, ext: String) = "$host/live/$username/$password/$streamId.$ext"
     fun movie(streamId: Long, ext: String?) = "$host/movie/$username/$password/$streamId.${ext.orEmpty().ifBlank { "mp4" }}"
-    /** Catch-up: a programme that already started (or ended), as a seekable stream. Times are in the provider's zone. */
-    fun timeshift(streamId: Long, startMs: Long, minutes: Int): String {
-        val start = java.time.Instant.ofEpochMilli(startMs).atZone(java.time.ZoneId.of("Europe/Amsterdam"))
+    /**
+     * Catch-up: a programme that already started (or ended), as a seekable stream. The start time is
+     * written in the provider's server zone ([zone], from the account info; Europe/Amsterdam if unknown).
+     */
+    fun timeshift(streamId: Long, startMs: Long, minutes: Int, zone: String? = null): String {
+        val tz = zone?.let { runCatching { java.time.ZoneId.of(it) }.getOrNull() } ?: java.time.ZoneId.of("Europe/Amsterdam")
+        val start = java.time.Instant.ofEpochMilli(startMs).atZone(tz)
             .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd:HH-mm"))
         return "$host/timeshift/$username/$password/$minutes/$start/$streamId.m3u8"
     }
@@ -48,6 +52,8 @@ data class Account(
     val maxConnections: Int,
     val trial: Boolean,
     val formats: List<String>,
+    /** The provider server's time zone, e.g. "Europe/Amsterdam"; catch-up addresses use it. */
+    val timezone: String? = null,
 )
 
 class AuthException(message: String) : IOException(message)
@@ -95,6 +101,7 @@ class XtreamClient(private val http: OkHttpClient) {
             maxConnections = u.int("max_connections") ?: 1,
             trial = u.bool("is_trial"),
             formats = u.list("allowed_output_formats").filterIsInstance<String>(),
+            timezone = root.obj("server_info")?.str("timezone")?.takeIf { it.isNotBlank() },
         )
     }
 

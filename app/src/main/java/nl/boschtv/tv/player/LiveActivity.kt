@@ -216,7 +216,7 @@ class LiveActivity : ComponentActivity() {
         tuneJob?.cancel()
         tuneJob = lifecycleScope.launch {
             val minutes = ((p.stop - p.start) / 60_000).toInt().coerceIn(5, 360) + 5
-            player.setMediaItem(Playback.item(c.prefs.source().timeshift(ch.id, p.start, minutes)))
+            player.setMediaItem(Playback.item(c.prefs.source().timeshift(ch.id, p.start, minutes, c.prefs.serverZone())))
             player.prepare(); player.playWhenReady = true
         }
         showBanner()
