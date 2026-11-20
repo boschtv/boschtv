@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Android lint runs in CI and fails the build on errors. Exceptions are listed here with the reason. -->
+<lint>
+    <!-- We use a few Media3 APIs marked unstable (load-error policy, track overrides, PlayerView options)
+         on purpose; this opts in once for the whole project. Re-check them when upgrading Media3. -->
+    <issue id="UnsafeOptInUsageError">
+        <option name="opt-in" value="androidx.media3.common.util.UnstableApi" />
+    </issue>
+    <!-- Version-update hints are handled by Dependabot pull requests, not by failing builds. -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+</lint>

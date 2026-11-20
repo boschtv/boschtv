@@ -286,6 +286,8 @@ class LiveActivity : ComponentActivity() {
         }
     }
 
+    // Lint wrongly flags the documented super.dispatchKeyEvent call as restricted (androidx.core marker).
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val code = event.keyCode
@@ -422,6 +424,7 @@ private fun ProgressLine(p: ProgrammeEntity, modifier: Modifier = Modifier) {
 }
 
 /** Three panes: lists, channels (with what is on now), and the selected channel's schedule. */
+@android.annotation.SuppressLint("ProduceStateDoesNotAssignValue")   // both produceState blocks do assign; lint misreads them
 @Composable
 private fun Guide(
     ui: LiveUi,

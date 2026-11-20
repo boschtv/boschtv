@@ -1,0 +1,46 @@
+# Tests, lints and builds every push to main and every pull request, forks included.
+# Needs no secrets: the build is signed with the runner's debug key and has no TMDB token,
+# so a pull request can never reach the release key or tokens. Releases are made locally
+# with tools/release.sh, which keeps the signing key off GitHub.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # Checks gradle-wrapper.jar against Gradle's published checksums (a pull request could swap it).
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+      - name: Lint
+        run: ./gradlew :app:lintRelease
+      - name: Release build
+        run: ./gradlew :app:assembleRelease
+      - name: Keep reports and the app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boschtv-ci
+          path: |
+            app/build/reports/
+            app/build/outputs/apk/release/*.apk
+          retention-days: 14

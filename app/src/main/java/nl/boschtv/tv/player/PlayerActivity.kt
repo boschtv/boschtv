@@ -295,6 +295,8 @@ class PlayerActivity : ComponentActivity() {
         }) + text
     }
 
+    // Lint wrongly flags the documented super.dispatchKeyEvent call as restricted (androidx.core marker).
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val wasVisible = ui.visible
