@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
@@ -14,7 +13,10 @@ val localProps = Properties().apply {
 
 android {
     namespace = "nl.boschtv.tv"
-    compileSdk = 35
+    // The SDK we compile against (newest Compose needs 37.1); targetSdk below decides the app's behaviour.
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "nl.boschtv.tv"
@@ -56,17 +58,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.tv.material3.ExperimentalTvMaterial3Api",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-            "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
-            "-opt-in=androidx.compose.ui.text.ExperimentalTextApi",
-            "-opt-in=androidx.media3.common.util.UnstableApi",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-        )
     }
     buildFeatures {
         compose = true
@@ -116,5 +107,20 @@ dependencies {
 tasks.withType<Test>().configureEach {
     listOf("server", "user", "pass", "language").forEach { k ->
         project.findProperty("xtream.$k")?.let { systemProperty("xtream.$k", it.toString()); outputs.upToDateWhen { false } }
+    }
+}
+
+// AGP 9 compiles Kotlin itself (no separate Kotlin Android plugin); options go here.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=androidx.tv.material3.ExperimentalTvMaterial3Api",
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
+            "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
+            "-opt-in=androidx.compose.ui.text.ExperimentalTextApi",
+            "-opt-in=androidx.media3.common.util.UnstableApi",
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+        )
     }
 }
