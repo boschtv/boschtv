@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -11,13 +12,16 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <!-- usesCleartextTraffic: IPTV lines are plain http. largeHeap: headroom while a 70 MB film list streams in. -->
+    <!-- The app's name is literal (not @string): installers such as Downloader read it straight from the
+         APK file without its resources, and would otherwise show the class name "nl.boschtv.tv.App". -->
     <application
         android:name=".App"
         android:allowBackup="false"
         android:banner="@drawable/app_banner"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="BoschTV"
+        tools:ignore="HardcodedText"
         android:largeHeap="true"
         android:supportsRtl="false"
         android:theme="@style/Theme.BoschTV"
