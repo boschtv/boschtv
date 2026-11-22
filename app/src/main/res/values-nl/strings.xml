@@ -271,4 +271,22 @@
     <string name="previews_sound">Previews met geluid</string>
     <string name="skip_intro">Intro overslaan</string>
     <string name="skip_recap">Samenvatting overslaan</string>
+    <!-- Profielen -->
+    <string name="profile_default">Ik</string>
+    <string name="whos_watching">Wie kijkt er?</string>
+    <string name="add_profile">Profiel toevoegen</string>
+    <string name="manage_profiles">Profielen beheren</string>
+    <string name="done">Klaar</string>
+    <string name="new_profile">Nieuw profiel</string>
+    <string name="edit_profile">Profiel bewerken</string>
+    <string name="profile_name">Naam</string>
+    <string name="avatar">Avatar</string>
+    <string name="colour">Kleur</string>
+    <string name="save">Opslaan</string>
+    <string name="cancel">Annuleren</string>
+    <string name="delete_profile">Profiel verwijderen</string>
+    <string name="delete_profile_hint">De kijkgeschiedenis, Mijn lijst, duimpjes en favoriete zenders van dit profiel gaan mee.</string>
+    <string name="name_needed">Geef het profiel eerst een naam.</string>
+    <string name="switch_profile">Wissel van profiel</string>
+    <string name="profile_own">Kijkgeschiedenis, Mijn lijst en aanbevelingen zijn per profiel.</string>
 </resources>

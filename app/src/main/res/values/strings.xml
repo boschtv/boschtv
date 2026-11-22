@@ -272,4 +272,22 @@
     <string name="previews_sound">Previews with sound</string>
     <string name="skip_intro">Skip intro</string>
     <string name="skip_recap">Skip recap</string>
+    <!-- Profiles -->
+    <string name="profile_default">Me</string>
+    <string name="whos_watching">Who\'s watching?</string>
+    <string name="add_profile">Add profile</string>
+    <string name="manage_profiles">Manage profiles</string>
+    <string name="done">Done</string>
+    <string name="new_profile">New profile</string>
+    <string name="edit_profile">Edit profile</string>
+    <string name="profile_name">Name</string>
+    <string name="avatar">Avatar</string>
+    <string name="colour">Colour</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_profile">Delete profile</string>
+    <string name="delete_profile_hint">Its watch history, My List, thumbs and favourite channels go with it.</string>
+    <string name="name_needed">Give the profile a name first.</string>
+    <string name="switch_profile">Switch profile</string>
+    <string name="profile_own">History, My List and recommendations are kept per profile.</string>
 </resources>

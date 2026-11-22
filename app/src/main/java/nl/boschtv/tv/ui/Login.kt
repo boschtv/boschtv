@@ -122,7 +122,7 @@ fun LoginScreen() {
 }
 
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, type: KeyboardType = KeyboardType.Text, last: Boolean = false) {
+internal fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, type: KeyboardType = KeyboardType.Text, last: Boolean = false) {
     var focused by remember { mutableStateOf(false) }
     val fm = LocalFocusManager.current
     val shape = RoundedCornerShape(14.dp)

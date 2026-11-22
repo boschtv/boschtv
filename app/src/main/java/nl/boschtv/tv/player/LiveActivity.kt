@@ -132,7 +132,7 @@ class LiveActivity : ComponentActivity() {
             override fun onPlayerError(error: PlaybackException) = retry()
         })
         setContent { BoschTheme { LiveScreen(player, ui, ::channelsOf, ::pick, ::toggleFavorite, ::schedule, ::replay, ::openTimeline, ::gridSchedule) } }
-        lifecycleScope.launch { c.db.channels().favoriteIds().collect { ui.favorites = it.toSet() } }
+        lifecycleScope.launch { c.db.channels().favoriteIds(c.profiles.id()).collect { ui.favorites = it.toSet() } }
         lifecycleScope.launch { init() }
     }
 
@@ -152,7 +152,7 @@ class LiveActivity : ComponentActivity() {
     }
 
     private suspend fun channelsOf(group: String): List<ChannelEntity> = when (group) {
-        GROUP_FAVORITES -> c.db.channels().favorites()
+        GROUP_FAVORITES -> c.db.channels().favorites(c.profiles.id())
         GROUP_ALL -> c.db.channels().all()
         else -> c.db.channels().byGroup(group)
     }
@@ -284,8 +284,9 @@ class LiveActivity : ComponentActivity() {
 
     private fun toggleFavorite(ch: ChannelEntity) {
         lifecycleScope.launch {
-            if (ch.id in ui.favorites) c.db.channels().removeFavorite(ch.id)
-            else c.db.channels().addFavorite(FavoriteEntity(ch.id, System.currentTimeMillis()))
+            val profile = c.profiles.id()
+            if (ch.id in ui.favorites) c.db.channels().removeFavorite(profile, ch.id)
+            else c.db.channels().addFavorite(FavoriteEntity(profile, ch.id, System.currentTimeMillis()))
         }
     }
 

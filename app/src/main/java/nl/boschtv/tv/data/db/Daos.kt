@@ -73,11 +73,11 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE search LIKE '%' || :q || '%' ORDER BY sort LIMIT :limit")
     suspend fun search(q: String, limit: Int): List<ChannelEntity>
 
-    @Query("SELECT c.* FROM channels c JOIN favorites f ON f.channelId = c.id ORDER BY f.addedAt")
-    suspend fun favorites(): List<ChannelEntity>
-    @Query("SELECT channelId FROM favorites") fun favoriteIds(): Flow<List<Long>>
+    @Query("SELECT c.* FROM channels c JOIN favorites f ON f.channelId = c.id WHERE f.profileId = :profile ORDER BY f.addedAt")
+    suspend fun favorites(profile: Long): List<ChannelEntity>
+    @Query("SELECT channelId FROM favorites WHERE profileId = :profile") fun favoriteIds(profile: Long): Flow<List<Long>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun addFavorite(f: FavoriteEntity)
-    @Query("DELETE FROM favorites WHERE channelId = :id") suspend fun removeFavorite(id: Long)
+    @Query("DELETE FROM favorites WHERE profileId = :profile AND channelId = :id") suspend fun removeFavorite(profile: Long, id: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertProgrammes(items: List<ProgrammeEntity>)
     @Query("DELETE FROM programmes WHERE channelId = :id") suspend fun clearProgrammes(id: Long)
@@ -86,24 +86,39 @@ interface ChannelDao {
     suspend fun programmes(id: Long, from: Long, limit: Int): List<ProgrammeEntity>
 }
 
+/** Everything here belongs to one profile: every query takes its id. */
 @Dao
 interface LibraryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveProgress(p: ProgressEntity)
-    @Query("SELECT * FROM progress WHERE contentId = :id") suspend fun progress(id: String): ProgressEntity?
-    @Query("SELECT * FROM progress WHERE titleKey = :key") suspend fun progressOf(key: String): List<ProgressEntity>
-    @Query("SELECT * FROM progress ORDER BY updatedAt DESC LIMIT :limit") suspend fun recentProgress(limit: Int): List<ProgressEntity>
-    @Query("DELETE FROM progress WHERE titleKey = :key") suspend fun clearProgress(key: String)
-    @Query("DELETE FROM progress") suspend fun clearAllProgress()
+    @Query("SELECT * FROM progress WHERE profileId = :profile AND contentId = :id") suspend fun progress(profile: Long, id: String): ProgressEntity?
+    @Query("SELECT * FROM progress WHERE profileId = :profile AND titleKey = :key") suspend fun progressOf(profile: Long, key: String): List<ProgressEntity>
+    @Query("SELECT * FROM progress WHERE profileId = :profile ORDER BY updatedAt DESC LIMIT :limit") suspend fun recentProgress(profile: Long, limit: Int): List<ProgressEntity>
+    @Query("DELETE FROM progress WHERE profileId = :profile AND titleKey = :key") suspend fun clearProgress(profile: Long, key: String)
+    @Query("DELETE FROM progress WHERE profileId = :profile") suspend fun clearAllProgress(profile: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun addToList(e: MyListEntity)
-    @Query("DELETE FROM my_list WHERE titleKey = :key") suspend fun removeFromList(key: String)
-    @Query("SELECT titleKey FROM my_list ORDER BY addedAt DESC") suspend fun myList(): List<String>
-    @Query("SELECT EXISTS(SELECT 1 FROM my_list WHERE titleKey = :key)") suspend fun inList(key: String): Boolean
+    @Query("DELETE FROM my_list WHERE profileId = :profile AND titleKey = :key") suspend fun removeFromList(profile: Long, key: String)
+    @Query("SELECT titleKey FROM my_list WHERE profileId = :profile ORDER BY addedAt DESC") suspend fun myList(profile: Long): List<String>
+    @Query("SELECT EXISTS(SELECT 1 FROM my_list WHERE profileId = :profile AND titleKey = :key)") suspend fun inList(profile: Long, key: String): Boolean
+    @Query("DELETE FROM my_list WHERE profileId = :profile") suspend fun clearList(profile: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun rate(e: RatingEntity)
-    @Query("DELETE FROM ratings WHERE titleKey = :key") suspend fun unrate(key: String)
-    @Query("SELECT * FROM ratings") suspend fun ratings(): List<RatingEntity>
-    @Query("SELECT * FROM ratings WHERE titleKey = :key") suspend fun rating(key: String): RatingEntity?
+    @Query("DELETE FROM ratings WHERE profileId = :profile AND titleKey = :key") suspend fun unrate(profile: Long, key: String)
+    @Query("SELECT * FROM ratings WHERE profileId = :profile") suspend fun ratings(profile: Long): List<RatingEntity>
+    @Query("SELECT * FROM ratings WHERE profileId = :profile AND titleKey = :key") suspend fun rating(profile: Long, key: String): RatingEntity?
+    @Query("DELETE FROM ratings WHERE profileId = :profile") suspend fun clearRatings(profile: Long)
+
+    @Query("DELETE FROM favorites WHERE profileId = :profile") suspend fun clearFavorites(profile: Long)
+}
+
+@Dao
+interface ProfileDao {
+    @Query("SELECT * FROM profiles ORDER BY createdAt, id") fun observe(): Flow<List<ProfileEntity>>
+    @Query("SELECT id FROM profiles") suspend fun ids(): List<Long>
+    @Query("SELECT COUNT(*) FROM profiles") suspend fun count(): Int
+    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insert(p: ProfileEntity): Long
+    @androidx.room.Update suspend fun update(p: ProfileEntity)
+    @Query("DELETE FROM profiles WHERE id = :id") suspend fun delete(id: Long)
 }
 
 @Dao

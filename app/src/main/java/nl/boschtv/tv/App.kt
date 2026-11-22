@@ -9,6 +9,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import nl.boschtv.tv.data.Catalog
 import nl.boschtv.tv.data.Enricher
 import nl.boschtv.tv.data.Epg
@@ -36,7 +40,8 @@ class AppContainer(app: Application) {
         .build()
     val client = XtreamClient(http)
     val catalog = Catalog(db, client, prefs)
-    val library = Library(db, catalog)
+    val profiles = nl.boschtv.tv.data.Profiles(db, prefs, scope)
+    val library = Library(db, catalog, profiles)
     val trends = nl.boschtv.tv.data.Trends(db, http, prefs, BuildConfig.TMDB_TOKEN)
     val recommender = Recommender(catalog, library, trends)
     val epg = Epg(db, client, prefs)
@@ -45,6 +50,16 @@ class AppContainer(app: Application) {
     val watchNext = WatchNext(app, catalog, library)
     val updater = nl.boschtv.tv.system.Updater(app, http)
     val skips = nl.boschtv.tv.data.SkipTimes(http)
+
+    init {
+        // Another profile starts watching: its own rows everywhere, and its own row on the Google TV home screen.
+        scope.launch {
+            profiles.active.filterNotNull().map { it.id }.distinctUntilChanged().drop(1).collect {
+                library.changed()
+                runCatching { watchNext.publish() }
+            }
+        }
+    }
 
     /** Refresh on launch when the catalog is older than a few hours; never blocks the UI. */
     fun refreshIfStale(force: Boolean = false) = scope.launch {

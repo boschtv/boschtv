@@ -47,6 +47,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
@@ -100,11 +102,32 @@ private sealed interface Layer {
 @Composable
 private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
     val c = rememberContainer()
-    val ctx = LocalContext.current
     val source by c.prefs.source.collectAsState(initial = null)
     val src = source ?: return Box(Modifier.fillMaxSize().background(Ink.Bg))
     if (!src.isConfigured) { LoginScreen(); return }
 
+    val profiles by c.profiles.all.collectAsState()
+    val active by c.profiles.active.collectAsState()
+    val list = profiles
+    val me = active ?: return Box(Modifier.fillMaxSize().background(Ink.Bg))
+    if (list == null) return Box(Modifier.fillMaxSize().background(Ink.Bg))
+    // "Who's watching?" when the app opens and more than one person uses it. Decided once per opening, so
+    // adding a second profile later does not throw it up. A Google TV tile plays for whoever watched last.
+    val ask = remember { list.size > 1 && deepLink?.host != "play" }
+    var asked by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    if (ask && !asked) { nl.boschtv.tv.ui.ProfilesScreen(onClose = null) { asked = true }; return }
+    var switching by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        // Another profile: start fresh on its home page, with its own rows.
+        androidx.compose.runtime.key(me.id) { Main(deepLink, onDeepLinkHandled, me, covered = switching) { switching = true } }
+        if (switching) nl.boschtv.tv.ui.ProfilesScreen(onClose = { switching = false }) { switching = false }
+    }
+}
+
+@Composable
+private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, profile: nl.boschtv.tv.data.db.ProfileEntity, covered: Boolean, onProfiles: () -> Unit) {
+    val c = rememberContainer()
+    val ctx = LocalContext.current
     var tab by remember { mutableStateOf(Tab.HOME) }
     // boschtv://play?key=… (a tile on the Google TV home screen) resumes straight into the player;
     // boschtv://live and boschtv://search open those screens, e.g. from a launcher shortcut.
@@ -143,7 +166,7 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
             openLive = { Playback.live(ctx, it) },
         )
     }
-    BackHandler(updating || picker || layers.isNotEmpty() || tab != Tab.HOME || scope != null) {
+    BackHandler(!covered && (updating || picker || layers.isNotEmpty() || tab != Tab.HOME || scope != null)) {
         when {
             updating -> later()
             picker -> picker = false
@@ -152,18 +175,18 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
             else -> scope = null   // Back on a service's home page returns to everything
         }
     }
-    LaunchedEffect(picker) { if (!picker && layers.isEmpty()) { delay(60); runCatching { content.requestFocus() } } }
+    LaunchedEffect(picker, covered) { if (!picker && !covered && layers.isEmpty()) { delay(60); runCatching { content.requestFocus() } } }
     // Coming back from a detail page lands on the tile you left from.
     val depth = layers.size
     LaunchedEffect(depth) { if (depth == 0) { delay(60); runCatching { content.requestFocus() } } }
     // Returning from the player or live TV: put the remote back where it was.
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-        if (layers.isEmpty()) runCatching { content.requestFocus() }
+        if (layers.isEmpty() && !covered) runCatching { content.requestFocus() }
     }
 
     Box(Modifier.fillMaxSize().background(Ink.Bg)) {
         // The tab stays composed underneath so its scroll position and focus survive.
-        val front = layers.isEmpty() && !picker && !updating
+        val front = layers.isEmpty() && !picker && !updating && !covered
         Box(Modifier.fillMaxSize().gate(front)) {
             when (tab) {
                 Tab.HOME -> HomeScreen(null, scope, nav, content, active = front)
@@ -176,10 +199,10 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
                 Tab.SETTINGS -> SettingsScreen(content)
                 Tab.LIVE -> Unit
             }
-            TopBar(tab, scope, enabled = front, updateWaiting = offered != null, onScope = { picker = true }) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t }
+            TopBar(tab, scope, profile, enabled = front, updateWaiting = offered != null, onScope = { picker = true }, onProfile = onProfiles) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t }
         }
         layers.forEachIndexed { i, layer ->
-            val top = i == layers.lastIndex && !picker && !updating
+            val top = i == layers.lastIndex && !picker && !updating && !covered
             Box(Modifier.fillMaxSize().background(Ink.Bg).gate(top)) {
                 val own = remember(layer) { FocusRequester() }
                 when (layer) {
@@ -199,7 +222,7 @@ private fun Modifier.gate(open: Boolean): Modifier =
     focusProperties { enter = { if (open) FocusRequester.Default else FocusRequester.Cancel } }.focusGroup()
 
 @Composable
-private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, updateWaiting: Boolean, onScope: () -> Unit, onSelect: (Tab) -> Unit) {
+private fun TopBar(selected: Tab, scope: Service?, profile: nl.boschtv.tv.data.db.ProfileEntity, enabled: Boolean, updateWaiting: Boolean, onScope: () -> Unit, onProfile: () -> Unit, onSelect: (Tab) -> Unit) {
     val current = remember { FocusRequester() }
     fun at(t: Tab) = if (selected == t) Modifier.focusRequester(current) else Modifier
     // A soft shade behind the bar keeps it readable over bright artwork.
@@ -224,6 +247,18 @@ private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, updateWaiti
             NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings), at(Tab.SETTINGS)) { onSelect(Tab.SETTINGS) }
             if (updateWaiting) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size(9.dp).background(Ink.Accent, CircleShape))
         }
+        ProfileButton(profile, onProfile)
+    }
+}
+
+/** Who is watching, at the end of the bar; opens "Who's watching?" to switch. */
+@Composable
+private fun ProfileButton(profile: nl.boschtv.tv.data.db.ProfileEntity, onClick: () -> Unit) {
+    nl.boschtv.tv.ui.Tile(onClick, Modifier.padding(start = 6.dp).size(40.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        scale = 1.12f, color = Color.Transparent, focusedColor = Color.Transparent) {
+        val label = "${profile.name}, ${stringResource(R.string.switch_profile)}"
+        nl.boschtv.tv.ui.Avatar(profile.avatar, profile.color, 40.dp,
+            Modifier.semantics { contentDescription = label })
     }
 }
 
