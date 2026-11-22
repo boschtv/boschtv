@@ -52,6 +52,8 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
     val c = rememberContainer()
     var text by remember { mutableStateOf("") }
     var titles by remember { mutableStateOf<List<Card>>(emptyList()) }
+    // What the programme guide has under this name, today and tomorrow, across all channels.
+    var onTv by remember { mutableStateOf<List<nl.boschtv.tv.data.db.GuideHit>>(emptyList()) }
     val firstKey = remember { FocusRequester() }
     val homeLocale = c.prefs.content.collectAsState(nl.boschtv.tv.core.ContentPrefs()).value.home.locale
     // Speak instead of type: uses the TV's own speech recognition when it has one.
@@ -70,9 +72,10 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
     }
 
     LaunchedEffect(text) {
-        if (text.trim().length < 2) { titles = emptyList(); return@LaunchedEffect }
+        if (text.trim().length < 2) { titles = emptyList(); onTv = emptyList(); return@LaunchedEffect }
         delay(180)
         titles = c.catalog.search(text, services = service?.bit ?: 0L)
+        onTv = if (service == null) c.epg.search(text, limit = 8) else emptyList()
     }
     LaunchedEffect(Unit) { delay(120); runCatching { firstKey.requestFocus() } }
 
@@ -100,7 +103,7 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
-                Tile(speak, Modifier.size(59.dp, 38.dp), scale = 1.06f, color = Ink.Accent, focusedColor = Ink.Text, focusedContent = Ink.Bg) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Mic, "Inspreken") } }
+                Tile(speak, Modifier.size(59.dp, 38.dp), scale = 1.06f, color = Ink.Accent, focusedColor = Ink.Text, focusedContent = Ink.Bg) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Mic, stringResource(R.string.key_speak)) } }
                 Tile({ text += " " }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.SpaceBar, stringResource(R.string.key_space)) } }
                 Tile({ text = text.dropLast(1) }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Rounded.Backspace, stringResource(R.string.key_delete)) } }
                 Tile({ text = "" }, Modifier.size(59.dp, 38.dp), scale = 1.06f) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.key_clear), style = MaterialTheme.typography.labelLarge) } }
@@ -113,8 +116,24 @@ fun SearchScreen(nav: Nav, focus: FocusRequester, service: nl.boschtv.tv.core.Se
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (onTv.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { Text(stringResource(R.string.on_tv), style = MaterialTheme.typography.titleLarge, color = Ink.Text) }
+                items(onTv, key = { "tv:${it.channelId}:${it.start}" }, span = { GridItemSpan(maxLineSpan) }) { p ->
+                    val now = System.currentTimeMillis()
+                    val time = if (p.start <= now) stringResource(R.string.on_now) else nl.boschtv.tv.player.dayLabel(p.start, now) + nl.boschtv.tv.player.hm(p.start)
+                    Tile({ nav.openLive(p.channelId) }, Modifier.fillMaxWidth().height(56.dp), scale = 1.02f, color = Ink.Surface, focusedColor = Ink.Text, ring = false, focusedContent = Ink.Bg) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            if (!p.logo.isNullOrBlank()) coil.compose.AsyncImage(p.logo, null, contentScale = androidx.compose.ui.layout.ContentScale.Fit, modifier = Modifier.size(48.dp, 32.dp))
+                            Text(time, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(150.dp), maxLines = 1)
+                            Text(p.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(p.channelName, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                        }
+                    }
+                }
+                if (titles.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(stringResource(R.string.films_and_series), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = 8.dp)) }
+            }
             items(titles, key = { it.key }) { card -> PosterCard(card, { nav.openTitle(card.key) }) }
-            if (text.trim().length >= 2 && titles.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+            if (text.trim().length >= 2 && titles.isEmpty() && onTv.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(stringResource(R.string.nothing_found_for, text), style = MaterialTheme.typography.titleLarge, color = Ink.Muted)
             }
         }

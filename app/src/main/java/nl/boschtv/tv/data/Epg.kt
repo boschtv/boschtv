@@ -37,6 +37,57 @@ class Epg(private val db: AppDatabase, private val client: XtreamClient, private
         list
     }
 
+    /**
+     * The whole guide in one go: the provider's XMLTV file, for every channel we keep, from an hour ago
+     * to a day and a half ahead. This is what lets the guide be searched across channels; a provider
+     * without such a file keeps working per channel as before. Returns how many programmes were stored.
+     */
+    suspend fun fillAll(): Int = withContext(Dispatchers.IO) {
+        val src = prefs.source()
+        if (!src.isConfigured) return@withContext 0
+        // Several copies of a channel (HD, 4K) share one guide id: each gets the programmes.
+        val byGuideId = db.channels().all().filter { !it.epgId.isNullOrBlank() }.groupBy({ it.epgId!!.lowercase() }, { it.id })
+        if (byGuideId.isEmpty()) return@withContext 0
+        val from = System.currentTimeMillis() - 3600_000L
+        val to = from + 37 * 3600_000L
+        val batch = ArrayList<ProgrammeEntity>(2000)
+        val cleared = HashSet<Long>()
+        var stored = 0
+        suspend fun flush() {
+            if (batch.isEmpty()) return
+            val rows = batch.toList(); batch.clear()
+            db.withTransaction {
+                // The first time a channel shows up its old listings go, so a changed schedule leaves no leftovers.
+                val fresh = rows.map { it.channelId }.distinct().filter { cleared.add(it) }
+                fresh.chunked(500).forEach { db.channels().clearProgrammesOf(it) }
+                db.channels().insertProgrammes(rows)
+            }
+            stored += rows.size
+        }
+        client.xmltv(src) { stream ->
+            kotlinx.coroutines.runBlocking {
+                nl.boschtv.tv.core.XmlTv.read(stream, wanted = { byGuideId.containsKey(it.lowercase()) }) { p ->
+                    if (p.stop < from || p.start > to) return@read
+                    for (id in byGuideId.getValue(p.channel.lowercase())) batch += ProgrammeEntity(id, p.start, p.stop, p.title.take(160), p.description?.take(400))
+                    if (batch.size >= 2000) kotlinx.coroutines.runBlocking { flush() }
+                }
+                flush()
+            }
+        }
+        // These channels are complete now: no need to ask for them one by one for a while.
+        val now = System.currentTimeMillis()
+        cleared.forEach { fetchedAt[it] = now }
+        stored
+    }
+
+    /** "When is the race on?": programmes by title across all channels, each one once (not per HD/4K copy). */
+    suspend fun search(text: String, limit: Int = 24): List<nl.boschtv.tv.data.db.GuideHit> = withContext(Dispatchers.IO) {
+        val q = text.trim()
+        if (q.length < 3) return@withContext emptyList()
+        db.channels().searchProgrammes(q, System.currentTimeMillis(), 300)
+            .distinctBy { it.title.lowercase() to it.start }.take(limit)
+    }
+
     private val quality = Regex("""\b(8k|4k|uhd|fhd|hd|sd|hevc|50fps|raw|dolby)\b""")
     private val spaces = Regex("""\s+""")
     private fun baseName(search: String) = spaces.replace(quality.replace(search, " "), " ").trim()

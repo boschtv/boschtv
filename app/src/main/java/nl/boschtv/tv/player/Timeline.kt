@@ -114,9 +114,10 @@ class TimelineUi {
 
 private val zone = ZoneId.systemDefault()
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
-private fun hm(ms: Long) = HM.format(Instant.ofEpochMilli(ms).atZone(zone))
+fun hm(ms: Long): String = HM.format(Instant.ofEpochMilli(ms).atZone(zone))
 
-private fun dayLabel(ms: Long, now: Long): String {
+/** "" for today, "Tomorrow ", otherwise the day's name: goes in front of a time. */
+fun dayLabel(ms: Long, now: Long = System.currentTimeMillis()): String {
     val d = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
     val today = LocalDate.now(zone)
     return when (d) {

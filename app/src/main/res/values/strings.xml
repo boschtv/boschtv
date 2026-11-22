@@ -59,7 +59,6 @@
     <string name="play">Play</string>
     <string name="from_start">Start over</string>
     <string name="loading">Loading…</string>
-    <string name="load_failed_retry">Couldn\'t load · try again</string>
     <string name="continue_ep">Continue S%1$d E%2$d</string>
     <string name="next_ep">Next: S%1$d E%2$d</string>
     <string name="play_ep">Play · S%1$d E%2$d</string>
@@ -147,7 +146,7 @@
     <string name="from_start_banner">From the start  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ skip 30 seconds  ·  OK pause  ·  Back = live</string>
     <string name="up_next">Next  %1$s  %2$s</string>
-    <string name="live_keys">OK  channels     ▶  guide     ▲▼  zap</string>
+    <string name="live_keys">OK  channels     hold OK  pause     ▶  guide     ▲▼  zap</string>
     <string name="tv_guide">TV guide</string>
     <string name="no_favorites">No favorites yet. Hold OK on a channel to add it.</string>
     <string name="no_channels_list">No channels in this list.</string>
@@ -293,4 +292,30 @@
     <string name="avatar_credit">Avatars made with DiceBear: Bottts and Avataaars by Pablo Stanley, Fun Emoji by Davis Uche (CC BY 4.0), Pixel Art by DiceBear (CC0).</string>
     <string name="trailer">Trailer</string>
     <string name="trailer_failed">This trailer can\'t be played here.</string>
+    <string name="like">I like this</string>
+    <string name="dislike">Not for me</string>
+    <string name="no_rewind">This channel can\'t be rewound</string>
+    <string name="live_paused">Paused</string>
+    <string name="behind_live_short">Just behind live</string>
+    <string name="behind_live">%1$d min behind live</string>
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_in">Stops in %1$d min</string>
+    <string name="still_watching">Still watching?</string>
+    <string name="keep_watching">Keep watching</string>
+    <string name="stop_watching">Stop</string>
+    <string name="playback">Playback</string>
+    <string name="still_watching_setting">Ask “Still watching?”</string>
+    <string name="still_watching_hint">After three episodes in a row without touching the remote.</string>
+    <string name="frame_rate_note">The picture follows the film\'s frame rate when the TV allows it: TV settings › Display &amp; Sound › Match content frame rate.</string>
+    <string name="on_tv">On TV</string>
+    <string name="on_now">On now</string>
+    <string name="films_and_series">Films and series</string>
+    <string name="add_subscription">Add a subscription</string>
+    <string name="add_subscription_title">Add another IPTV subscription</string>
+    <string name="switch_to">Switch to %1$s</string>
+    <string name="forget">Forget</string>
+    <string name="building_catalog">Building your catalog</string>
+    <string name="key_speak">Speak</string>
+    <string name="episodes">Episodes</string>
+    <string name="episodes_failed">The episodes couldn\'t be loaded. Press Play to try again.</string>
 </resources>

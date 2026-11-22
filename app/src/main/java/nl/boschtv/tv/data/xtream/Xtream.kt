@@ -133,6 +133,16 @@ class XtreamClient(private val http: OkHttpClient) {
         }
     }
 
+    /** The provider's whole programme guide as one XMLTV file, handed to [block] as a stream. */
+    fun <T> xmltv(src: Source, block: (java.io.InputStream) -> T): T {
+        val url = "${src.host}/xmltv.php".toHttpUrl().newBuilder()
+            .addQueryParameter("username", src.username).addQueryParameter("password", src.password).build()
+        http.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build()).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException(Texts.get(R.string.err_server, resp.code))
+            return block((resp.body ?: throw IOException(Texts.get(R.string.err_invalid))).byteStream())
+        }
+    }
+
     fun obj(src: Source, action: String, vararg extra: Pair<String, String>): JsonObj? =
         get(url(src, action, *extra), null) { it.readJsonValue().asObj() }
 }

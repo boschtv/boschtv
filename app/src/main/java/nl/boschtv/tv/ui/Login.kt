@@ -61,9 +61,12 @@ import nl.boschtv.tv.data.SyncState
 import nl.boschtv.tv.data.xtream.Source
 import nl.boschtv.tv.setup.SetupServer
 
-/** First run: scan the QR code and paste the line on your phone, or type it here. */
+/**
+ * First run: scan the QR code and paste the line on your phone, or type it here. With [add] it saves a
+ * second subscription next to the one in use (from Settings); Back returns without adding one.
+ */
 @Composable
-fun LoginScreen() {
+fun LoginScreen(add: Boolean = false) {
     val c = rememberContainer()
     val scope = rememberCoroutineScope()
     var host by remember { mutableStateOf("") }
@@ -78,6 +81,12 @@ fun LoginScreen() {
         if (!src.isConfigured) { status = Texts.get(R.string.fill_in); return }
         busy = true; status = Texts.get(R.string.logging_in)
         scope.launch {
+            if (add) {
+                // Only checked here: its catalog is built after the app has switched to it.
+                runCatching { c.addSubscription(src) }.onFailure { status = Texts.get(R.string.login_failed, it.message ?: Texts.get(R.string.unknown_error)) }
+                busy = false
+                return@launch
+            }
             val result = c.sync.sync(src)
             if (result.isSuccess) { c.prefs.saveSource(src); c.refreshIfStale() }
             else status = Texts.get(R.string.login_failed, result.exceptionOrNull()?.message ?: Texts.get(R.string.unknown_error))
@@ -89,6 +98,7 @@ fun LoginScreen() {
     DisposableEffect(Unit) { server.start(); onDispose { server.stop() } }
     LaunchedEffect(Unit) { delay(200); runCatching { first.requestFocus() } }
     val sync by c.sync.state.collectAsState()
+    androidx.activity.compose.BackHandler(add) { c.adding.value = false }
 
     Row(Modifier.fillMaxSize().background(Ink.Bg).padding(horizontal = 72.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(72.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -96,11 +106,11 @@ fun LoginScreen() {
                 Image(painterResource(R.drawable.ic_logo), "BoschTV", Modifier.size(52.dp))
                 Text("  boschtv", style = MaterialTheme.typography.displayMedium, color = Ink.Text)
             }
-            Text(stringResource(R.string.login_title), style = MaterialTheme.typography.titleLarge, color = Ink.Soft, modifier = Modifier.padding(bottom = 8.dp))
+            Text(stringResource(if (add) R.string.add_subscription_title else R.string.login_title), style = MaterialTheme.typography.titleLarge, color = Ink.Soft, modifier = Modifier.padding(bottom = 8.dp))
             Field(host, { host = it }, stringResource(R.string.server_hint), type = KeyboardType.Uri)
             Field(user, { user = it }, stringResource(R.string.username))
             Field(pass, { pass = it }, stringResource(R.string.password), last = true)
-            Pill(if (busy) stringResource(R.string.busy) else stringResource(R.string.log_in), { login(Source.of(host, user, pass)) }, Modifier.padding(top = 8.dp).focusRequester(first), primary = true, height = 48.dp)
+            Pill(if (busy) stringResource(R.string.busy) else stringResource(R.string.log_in), { login(Source.of(host, user, pass)) }, Modifier.padding(top = 8.dp).focusRequester(first), primary = true, height = 40.dp)
             val running = sync as? SyncState.Running
             if (busy && running != null) {
                 Text("${running.message}  ${(running.progress * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft)
@@ -153,5 +163,18 @@ private fun qrBitmap(text: String): Bitmap {
     val m = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0)
     return Bitmap.createBitmap(m.width, m.height, Bitmap.Config.RGB_565).apply {
         for (x in 0 until m.width) for (y in 0 until m.height) setPixel(x, y, if (m[x, y]) 0xFF0A0A24.toInt() else 0xFFFFFFFF.toInt())
+    }
+}
+
+/** A subscription whose catalog is being built for the first time: the same bar as at the first login. */
+@Composable
+fun CatalogProgress(running: SyncState.Running) {
+    Column(Modifier.fillMaxSize().background(Ink.Bg).padding(horizontal = 240.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
+        Text(stringResource(R.string.building_catalog), style = MaterialTheme.typography.headlineLarge, color = Ink.Text)
+        Text("${running.message}  ${(running.progress * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft)
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Ink.Line)) {
+            Box(Modifier.fillMaxWidth(running.progress.coerceIn(0.02f, 1f)).height(6.dp).background(Ink.Accent))
+        }
+        Text(stringResource(R.string.first_time), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted)
     }
 }

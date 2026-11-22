@@ -1,8 +1,8 @@
 # BoschTV
 
 A TV app for Android TV and Google TV (Chromecast with Google TV) that turns an IPTV subscription
-into something that feels like a real streaming service. Films and series are presented like Netflix:
-one catalog with real genres, streaming-service shelves, continue watching and recommendations.
+into something that feels like a real streaming service. Films and series are presented as one
+catalog with real genres, streaming-service shelves, continue watching and recommendations.
 Live TV behaves like a TV, with zapping, a channel list and a timeline guide. The provider's hundreds
 of categories are never shown; the app reads them and builds proper pages from them.
 
@@ -13,8 +13,9 @@ of categories are never shown; the app reads them and builds proper pages from t
 | ![Top 10 series this week](docs/screenshots/top10.jpg) | ![A film with More like this](docs/screenshots/movie.jpg) |
 | ![A series with seasons and episodes](docs/screenshots/series.jpg) | ![The Kids tab](docs/screenshots/kids.jpg) |
 
-BoschTV contains no content and no provider. You log in with your own Xtream Codes subscription
-(server, username, password), the login nearly every IPTV provider gives out.
+BoschTV is a player. It contains no channels, films, series, playlists or provider, and this project
+does not sell, recommend or link to any. You log in with your own Xtream Codes subscription (server,
+username, password), the login nearly every IPTV provider gives out.
 
 ## Install
 
@@ -42,14 +43,18 @@ New versions are offered by the app itself (Settings → Check for updates).
   titles.
 - **Genres** with combinable filters for kind, year and sort order.
 - **Player.** Resume, "Skip intro" and "Skip recap", next episode when the credits start, subtitles and
-  audio tracks, fast skipping.
+  audio tracks, fast skipping, and "Still watching?" after three episodes nobody touched the remote for. The TV switches to the film's own frame rate when its settings allow it.
 - **Live TV.** Last channel on start, up/down zapping, number keys, channel lists, favourites, a
   timeline guide (press ▶), and watching a programme from its beginning where the provider allows it.
-- **Search** with an on-screen keyboard or your voice.
+  Hold OK to pause; rewind on channels with an archive. A sleep timer in the channel list.
+- **Search** with an on-screen keyboard or your voice, in films and series and in the TV guide of
+  every channel ("when is the race on?").
+- **More than one subscription.** Add a second line in Settings and switch between them; your history
+  and list go along.
 - **Private.** Your history, list and progress stay on the TV. The app talks only to your provider,
   to TMDB (posters, trending lists), to TheIntroDB and IntroDB (skip times) and to GitHub (update check).
 
-The app's own texts are Dutch for now; see the roadmap.
+The app's own texts are in English, Dutch, German, French, Spanish and Turkish, following the TV's language.
 
 ## Working on it
 
@@ -65,7 +70,9 @@ Plans are in [ROADMAP.md](ROADMAP.md).
 - This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming-service data by
   JustWatch.
 - Licenses of the software BoschTV is built with: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- You are responsible for the subscription you use with it.
+- Use BoschTV only with a subscription that holds the rights to what it streams where you live. That
+  is your responsibility; the authors have no knowledge of or control over what a provider offers.
+- Issues and pull requests that name, link to or ask for providers or playlists are closed.
 
 ## License
 

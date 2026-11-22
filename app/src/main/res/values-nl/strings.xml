@@ -58,7 +58,6 @@
     <string name="play">Afspelen</string>
     <string name="from_start">Vanaf begin</string>
     <string name="loading">Laden…</string>
-    <string name="load_failed_retry">Laden lukte niet · opnieuw proberen</string>
     <string name="continue_ep">Verder met S%1$d A%2$d</string>
     <string name="next_ep">Volgende: S%1$d A%2$d</string>
     <string name="play_ep">Afspelen · S%1$d A%2$d</string>
@@ -146,7 +145,7 @@
     <string name="from_start_banner">Vanaf begin  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ 30 seconden spoelen  ·  OK pauze  ·  Terug = live</string>
     <string name="up_next">Straks  %1$s  %2$s</string>
-    <string name="live_keys">OK  zenders     ▶  tv-gids     ▲▼  zappen</string>
+    <string name="live_keys">OK  zenders     OK vasthouden  pauze     ▶  tv-gids     ▲▼  zappen</string>
     <string name="tv_guide">Tv-gids</string>
     <string name="no_favorites">Nog geen favorieten. Houd OK ingedrukt op een zender om hem toe te voegen.</string>
     <string name="no_channels_list">Geen zenders in deze lijst.</string>
@@ -292,4 +291,30 @@
     <string name="avatar_credit">Avatars gemaakt met DiceBear: Bottts en Avataaars door Pablo Stanley, Fun Emoji door Davis Uche (CC BY 4.0), Pixel Art door DiceBear (CC0).</string>
     <string name="trailer">Trailer</string>
     <string name="trailer_failed">Deze trailer kan hier niet worden afgespeeld.</string>
+    <string name="like">Vind ik leuk</string>
+    <string name="dislike">Niets voor mij</string>
+    <string name="no_rewind">Deze zender kan niet terugspoelen</string>
+    <string name="live_paused">Gepauzeerd</string>
+    <string name="behind_live_short">Net achter live</string>
+    <string name="behind_live">%1$d min achter live</string>
+    <string name="sleep_timer">Slaaptimer</string>
+    <string name="sleep_in">Stopt over %1$d min</string>
+    <string name="still_watching">Kijk je nog?</string>
+    <string name="keep_watching">Verder kijken</string>
+    <string name="stop_watching">Stoppen</string>
+    <string name="playback">Afspelen</string>
+    <string name="still_watching_setting">Vraag “Kijk je nog?”</string>
+    <string name="still_watching_hint">Na drie afleveringen achter elkaar zonder de afstandsbediening aan te raken.</string>
+    <string name="frame_rate_note">Het beeld volgt de beeldsnelheid van de film als de tv dat toestaat: tv-instellingen › Beeld en geluid › Framesnelheid van content afstemmen.</string>
+    <string name="on_tv">Op tv</string>
+    <string name="on_now">Nu bezig</string>
+    <string name="films_and_series">Films en series</string>
+    <string name="add_subscription">Abonnement toevoegen</string>
+    <string name="add_subscription_title">Nog een IPTV-abonnement toevoegen</string>
+    <string name="switch_to">Wissel naar %1$s</string>
+    <string name="forget">Vergeten</string>
+    <string name="building_catalog">Je catalogus wordt opgebouwd</string>
+    <string name="key_speak">Inspreken</string>
+    <string name="episodes">Afleveringen</string>
+    <string name="episodes_failed">De afleveringen konden niet worden geladen. Druk op Afspelen om het opnieuw te proberen.</string>
 </resources>

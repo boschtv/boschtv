@@ -30,11 +30,15 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /** Manual dependency container: one of everything, reachable through the Application. */
-class AppContainer(app: Application) {
+class AppContainer(private val app: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val prefs = Prefs(app)
     /** The catalog: replaceable. */
-    val db = AppDatabase.create(app)
+    // Which subscription is in use decides which catalog is opened: one small read before anything is shown.
+    val subscription = kotlinx.coroutines.runBlocking { prefs.activeSubscription() }
+    val db = AppDatabase.create(app, subscription)
+    /** True while the login screen is up to add another subscription next to the one in use. */
+    val adding = kotlinx.coroutines.flow.MutableStateFlow(false)
     /** What the people on this TV made themselves: kept through updates, logging out and another provider. */
     val user = UserDatabase.create(app)
     val http: OkHttpClient = OkHttpClient.Builder()
@@ -55,6 +59,7 @@ class AppContainer(app: Application) {
     val watchNext = WatchNext(app, catalog, library)
     val updater = nl.boschtv.tv.system.Updater(app, http)
     val skips = nl.boschtv.tv.data.SkipTimes(http, BuildConfig.TMDB_TOKEN)
+    val sleep = nl.boschtv.tv.data.SleepTimer()
 
     init {
         // Another profile starts watching: its own rows everywhere, and its own row on the Google TV home screen.
@@ -72,11 +77,50 @@ class AppContainer(app: Application) {
      * and favourite channels stay and line up again with the next catalog.
      */
     suspend fun logout() {
-        prefs.logout()
+        val next = prefs.logout()
         kotlinx.coroutines.withContext(Dispatchers.IO) { runCatching { db.clearAllTables() } }
         catalog.invalidate()
         sync.version.value++
         runCatching { watchNext.publish() }
+        // Another saved subscription takes over, with its own catalog.
+        if (next != null) restart()
+    }
+
+    /** Forgets a saved subscription that is not in use, and the catalog that was built for it. */
+    suspend fun forget(id: Int) {
+        if (id == subscription) return
+        prefs.removeSubscription(id)
+        kotlinx.coroutines.withContext(Dispatchers.IO) { runCatching { app.deleteDatabase(AppDatabase.nameFor(id)) } }
+    }
+
+    /** Goes on with subscription [id]: the app starts again on that subscription's catalog. */
+    suspend fun switchTo(id: Int) {
+        if (id == subscription) return
+        prefs.activate(id)
+        restart()
+    }
+
+    /** Checks a new login and, when it works, switches to it. Throws with a readable message when it does not. */
+    suspend fun addSubscription(src: nl.boschtv.tv.data.xtream.Source) {
+        val account = kotlinx.coroutines.withContext(Dispatchers.IO) { client.account(src) }
+        if (!account.active) throw java.io.IOException(account.message)
+        val id = prefs.addSubscription(src)
+        adding.value = false
+        if (id != subscription) switchTo(id)
+    }
+
+    private fun restart() {
+        val pm = app.packageManager
+        val launch = pm.getLeanbackLaunchIntentForPackage(app.packageName) ?: pm.getLaunchIntentForPackage(app.packageName) ?: return
+        app.startActivity(android.content.Intent.makeRestartActivityTask(launch.component))
+        Runtime.getRuntime().exit(0)
+    }
+
+    /** The whole programme guide, twice a day at most: it is one large download. */
+    suspend fun refreshGuide() {
+        if (System.currentTimeMillis() - prefs.lastGuide() < 12 * 3600_000L) return
+        prefs.markGuide()   // also when it fails: a provider without a guide file is not asked again and again
+        epg.fillAll()
     }
 
     /** Refresh on launch when the catalog is older than a few hours; never blocks the UI. */
@@ -93,6 +137,7 @@ class AppContainer(app: Application) {
         }
         // New trending lists: tell the screens to rebuild their rows.
         if (runCatching { trends.refresh(force) }.getOrDefault(false)) sync.version.value++
+        launch { runCatching { refreshGuide() } }   // a large download: nothing else waits for it
         runCatching { enricher.run(maxItems = 200) }
         runCatching { watchNext.publish() }
     }
