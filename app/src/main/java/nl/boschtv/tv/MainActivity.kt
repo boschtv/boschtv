@@ -233,7 +233,10 @@ private fun TopBar(selected: Tab, scope: Service?, profile: nl.boschtv.tv.data.d
             .focusProperties { enter = { if (enabled) current else FocusRequester.Cancel } }.focusGroup(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        ScopeButton(scope, onScope)
+        // The bar goes round: left from the first item lands on the last, right from the last on the first.
+        val firstItem = remember { FocusRequester() }
+        val lastItem = remember { FocusRequester() }
+        ScopeButton(scope, onScope, Modifier.focusRequester(firstItem).focusProperties { left = lastItem })
         Spacer(Modifier.width(8.dp))
         NavItem("", selected == Tab.SEARCH, Icons.Rounded.Search, stringResource(R.string.search), at(Tab.SEARCH)) { onSelect(Tab.SEARCH) }
         for (t in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.GENRES, Tab.KIDS, Tab.MYLIST)) {
@@ -247,14 +250,14 @@ private fun TopBar(selected: Tab, scope: Service?, profile: nl.boschtv.tv.data.d
             NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings), at(Tab.SETTINGS)) { onSelect(Tab.SETTINGS) }
             if (updateWaiting) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size(9.dp).background(Ink.Accent, CircleShape))
         }
-        ProfileButton(profile, onProfile)
+        ProfileButton(profile, onProfile, Modifier.focusRequester(lastItem).focusProperties { right = firstItem })
     }
 }
 
 /** Who is watching, at the end of the bar; opens "Who's watching?" to switch. */
 @Composable
-private fun ProfileButton(profile: nl.boschtv.tv.data.db.ProfileEntity, onClick: () -> Unit) {
-    nl.boschtv.tv.ui.Tile(onClick, Modifier.padding(start = 6.dp).size(40.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+private fun ProfileButton(profile: nl.boschtv.tv.data.db.ProfileEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    nl.boschtv.tv.ui.Tile(onClick, Modifier.padding(start = 6.dp).then(modifier).size(40.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
         scale = 1.12f, color = Color.Transparent, focusedColor = Color.Transparent) {
         val label = "${profile.name}, ${stringResource(R.string.switch_profile)}"
         nl.boschtv.tv.ui.Avatar(profile.avatar, profile.color, 40.dp,
@@ -302,11 +305,11 @@ private fun UpdatePrompt(state: nl.boschtv.tv.system.Updater.State, onLater: () 
 
 /** The logo doubles as the switch between everything and one streaming service. */
 @Composable
-private fun ScopeButton(scope: Service?, onClick: () -> Unit) {
+private fun ScopeButton(scope: Service?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val logo = nl.boschtv.tv.ui.serviceLogo(scope, "w92")
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = Modifier.height(48.dp),
+        modifier = modifier.height(48.dp),
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
