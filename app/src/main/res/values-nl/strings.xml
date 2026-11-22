@@ -145,7 +145,7 @@
     <string name="from_start_banner">Vanaf begin  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ 30 seconden spoelen  ·  OK pauze  ·  Terug = live</string>
     <string name="up_next">Straks  %1$s  %2$s</string>
-    <string name="live_keys">OK  zenders     OK vasthouden  pauze     ▶  tv-gids     ▲▼  zappen</string>
+    <string name="live_keys">◀  zenders     OK  opties     ▶  tv-gids     ▲▼  zappen</string>
     <string name="tv_guide">Tv-gids</string>
     <string name="no_favorites">Nog geen favorieten. Houd OK ingedrukt op een zender om hem toe te voegen.</string>
     <string name="no_channels_list">Geen zenders in deze lijst.</string>
@@ -317,4 +317,9 @@
     <string name="key_speak">Inspreken</string>
     <string name="episodes">Afleveringen</string>
     <string name="episodes_failed">De afleveringen konden niet worden geladen. Druk op Afspelen om het opnieuw te proberen.</string>
+    <string name="back_again">Druk nogmaals op Terug om BoschTV te sluiten</string>
+    <string name="back_30">30 s terug</string>
+    <string name="forward_30">30 s vooruit</string>
+    <string name="to_live">Terug naar live</string>
+    <string name="channels">Zenders</string>
 </resources>

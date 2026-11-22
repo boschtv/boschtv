@@ -71,8 +71,9 @@ class Nav(
 /** Full-bleed artwork plus the essentials of whatever tile has focus. Purely local data: instant. */
 @Composable
 fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, showService: Boolean = true, compact: Boolean = false) {
-    // Compact (further down the rows): only a strip of artwork and the title line, so the rows get the screen.
-    val fadeEnd by androidx.compose.animation.core.animateFloatAsState(if (compact) 0.3f else 0.62f, tween(250), label = "fade")
+    // Compact (further down the rows, menu bar out of the way): everything moves up into the bar's place and
+    // the picture fades out a little sooner, so the rows can come up without running into the text.
+    val fadeEnd by androidx.compose.animation.core.animateFloatAsState(if (compact) 0.52f else 0.62f, tween(250), label = "fade")
     val top by androidx.compose.animation.core.animateDpAsState(if (compact) 26.dp else 84.dp, tween(250), label = "top")
     // Text follows focus immediately; the big image waits a beat so fast scrolling stays smooth.
     var shown by remember { mutableStateOf(card) }
@@ -106,8 +107,8 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
                 genreLine(card.genres).ifBlank { null },
                 card.label,
             ))
-            if (!compact) card.plot?.let {
-                Text(it, style = MaterialTheme.typography.bodyLarge, color = Ink.Soft, maxLines = if (titleLines > 1) 1 else 3, overflow = TextOverflow.Ellipsis,
+            card.plot?.let {
+                Text(it, style = MaterialTheme.typography.bodyLarge, color = Ink.Soft, maxLines = if (titleLines > 1) 1 else if (compact) 2 else 3, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp))
             }
         }
@@ -142,19 +143,20 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
         rows = c.recommender.home(kind, service?.bit ?: 0L, kids)
     }
     val loaded = rows != null
-    // Past the first row the menu bar steps aside and the artwork shrinks to a strip: the rows get the
-    // room, so the next one already shows. Up to the first row (or Back) brings both back.
+    // Past the first row the menu bar steps aside and the title moves up into its place: the rows get that
+    // room, so the top of the next one already shows. The picture and its preview stay as large as they
+    // were. Up to the first row (or Back) brings the bar back.
     val deep by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     LaunchedEffect(deep) { onDeep(deep) }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onDeep(false) } }
-    val share by androidx.compose.animation.core.animateFloatAsState(if (deep) 0.74f else 0.52f, tween(250), label = "rows")
+    val share by androidx.compose.animation.core.animateFloatAsState(if (deep) 0.62f else 0.52f, tween(250), label = "rows")
     LaunchedEffect(loaded, kind, service) {
         if (loaded) { delay(60); runCatching { first.requestFocus() } }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val list = rows
-        Hero(focused ?: list?.firstOrNull { it.cards.isNotEmpty() }?.cards?.first(), preview = active && !deep, showService = service == null, compact = deep)
+        Hero(focused ?: list?.firstOrNull { it.cards.isNotEmpty() }?.cards?.first(), preview = active, showService = service == null, compact = deep)
         val railsHeight = maxHeight * 0.52f
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(share)) {
             when {

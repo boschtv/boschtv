@@ -549,20 +549,16 @@ private fun VodScreen(
         // While the bar is hidden it has the focus (white), so a single OK presses it.
         val floating = ui.floating
         val floatFocus = remember { FocusRequester() }
+        // What the button last said: it keeps saying that while it fades out, instead of emptying and shrinking.
+        var lastFloating by remember { mutableStateOf(floating) }
+        LaunchedEffect(floating) { if (floating != null) lastFloating = floating }
         AnimatedVisibility(floating != null && !ui.scrubbing && !ui.tracksOpen && !ui.stillWatching, enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = if (ui.visible) 150.dp else 48.dp)) {
-            val label = when (floating) {
-                is Floating.Skip -> stringResource(floating.label)
-                is Floating.Next -> floating.inSeconds?.let { stringResource(R.string.next_ep_in, it) } ?: stringResource(R.string.next_episode)
-                null -> ""
+            when (val shown = floating ?: lastFloating) {
+                is Floating.Skip -> OverPicture(stringResource(shown.label), null, { player.seekTo(shown.to); ui.position = shown.to }, Modifier.focusRequester(floatFocus))
+                is Floating.Next -> OverPicture(stringResource(R.string.next_episode), shown.inSeconds, onNext, Modifier.focusRequester(floatFocus))
+                null -> Unit
             }
-            MainButton(label, {
-                when (floating) {
-                    is Floating.Skip -> { player.seekTo(floating.to); ui.position = floating.to }
-                    is Floating.Next -> onNext()
-                    null -> Unit
-                }
-            }, Modifier.focusRequester(floatFocus), icon = Icons.Rounded.SkipNext, height = 40.dp)
         }
         LaunchedEffect(floating?.javaClass, ui.visible) {
             if (floating != null && !ui.visible) { delay(120); runCatching { floatFocus.requestFocus() } }
@@ -633,6 +629,45 @@ private fun TrackPanel(ui: VodUi, modifier: Modifier) {
             items(ui.audio.size) { i ->
                 val o = ui.audio[i]
                 ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0 && ui.text.isEmpty()) Modifier.focusRequester(first) else Modifier)
+            }
+        }
+    }
+}
+
+/**
+ * The one button that lies over the picture: "Skip intro", "Skip recap", "Next episode". Always the same
+ * size, whatever it says. Dark glass with a thin outline while the control bar has the remote, white once
+ * it has it itself. A countdown ([seconds] until the next episode starts) fills it from the left and
+ * shows its number where the arrow otherwise is.
+ */
+@Composable
+private fun OverPicture(text: String, seconds: Int?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+    val filled by androidx.compose.animation.core.animateFloatAsState(
+        if (seconds == null) 0f else (1f - seconds * 1000f / AUTO_NEXT_MS).coerceIn(0f, 1f),
+        androidx.compose.animation.core.tween(1000, easing = androidx.compose.animation.core.LinearEasing), label = "countdown")
+    androidx.tv.material3.Surface(
+        onClick = onClick,
+        modifier = modifier.size(220.dp, 44.dp).onFocusChanged { focused = it.isFocused },
+        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape),
+        scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+            containerColor = Color(0xD90A0A24), focusedContainerColor = Ink.Text, pressedContainerColor = Ink.Text,
+            contentColor = Ink.Text, focusedContentColor = Ink.Bg,
+        ),
+        border = androidx.tv.material3.ClickableSurfaceDefaults.border(
+            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.5.dp, Color(0x73FFFFFF)), shape = shape),
+            focusedBorder = androidx.tv.material3.Border.None,
+        ),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (seconds != null) Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(if (focused) Ink.Accent.copy(alpha = 0.28f) else Color(0x33FFFFFF)))
+            Row(Modifier.fillMaxSize().padding(start = 18.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (seconds != null) Text("$seconds", style = MaterialTheme.typography.titleLarge, maxLines = 1)
+                else androidx.tv.material3.Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(24.dp))
             }
         }
     }

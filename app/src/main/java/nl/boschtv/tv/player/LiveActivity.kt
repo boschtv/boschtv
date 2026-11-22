@@ -41,6 +41,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.material.icons.rounded.Pause
+import nl.boschtv.tv.ui.IconAction
+import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Forward30
+import androidx.compose.material.icons.rounded.Replay30
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.runtime.produceState
@@ -110,6 +116,8 @@ class LiveUi {
     var paused by mutableStateOf(false)
     /** How far behind live the picture is, while [behind]. */
     var lagMs by mutableLongStateOf(0L)
+    /** The options bar over the picture (pause, skip, channels, guide): OK brings it up. */
+    var bar by mutableStateOf(false)
     /** Minutes until the sleep timer stops playback; 0 when it is off. */
     var sleepLeft by mutableStateOf(0)
     /** A short remark in the banner ("this channel cannot be rewound"). */
@@ -138,7 +146,9 @@ class LiveActivity : ComponentActivity() {
     private var shiftStart: Long? = null
     private var lag = 0L
     private var pausedAt = 0L
-    private var okDown = false
+    private var barJob: Job? = null
+    /** The OK press that brought the bar up is still down: its release must not press the bar's first button. */
+    private var opening = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -272,7 +282,7 @@ class LiveActivity : ComponentActivity() {
         if (ui.replay == null) ui.behind = true
         pausedAt = System.currentTimeMillis()
         player.pause()
-        showBanner()
+        showBar()
     }
 
     private fun resume() {
@@ -373,6 +383,16 @@ class LiveActivity : ComponentActivity() {
         tune(list[((if (i < 0) 0 else i + delta) % list.size + list.size) % list.size])
     }
 
+    /** Brings the options bar up, and takes it away again a few seconds after the last key (it stays while paused). */
+    private fun showBar() {
+        ui.bar = true
+        barJob?.cancel()
+        barJob = lifecycleScope.launch { delay(6000); while (ui.paused) delay(1000); ui.bar = false }
+        showBanner()
+    }
+
+    private fun togglePause() { if (ui.paused) resume() else pause() }
+
     private fun showBanner() {
         ui.banner = true
         bannerJob?.cancel()
@@ -398,16 +418,14 @@ class LiveActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
         val ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
-        // Plain live TV: a short OK opens the channel list, holding OK pauses (most TV remotes have no pause key).
-        if (ok && !ui.timeline && !ui.guide && ui.replay == null && !ui.behind) {
-            when {
-                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> okDown = true
-                event.action == KeyEvent.ACTION_DOWN && okDown -> { okDown = false; pause() }
-                event.action == KeyEvent.ACTION_UP && okDown -> { okDown = false; ui.banner = false; ui.guide = true }
-            }
+        // Watching, nothing on screen: OK brings up the options bar (pause, skip, channels, guide). The channel
+        // list is also on Left and the guide on Right. Only a fresh press counts, not one still held from a menu.
+        if (ok && !ui.timeline && !ui.guide && !ui.bar) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { opening = true; showBar() }
             return true
         }
-        if (event.action != KeyEvent.ACTION_DOWN) { if (ok) okDown = false; return super.dispatchKeyEvent(event) }
+        if (ok && opening) { if (event.action == KeyEvent.ACTION_UP) opening = false; return true }
+        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         if (ui.timeline) {
             val g = ui.grid
             val list = ui.zapList
@@ -428,11 +446,23 @@ class LiveActivity : ComponentActivity() {
             if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_GUIDE) { ui.guide = false; return true }
             return super.dispatchKeyEvent(event)
         }
+        // The options bar is up: left, right and OK belong to its buttons.
+        if (ui.bar) {
+            val shifted = ui.replay != null || ui.behind
+            when (code) {
+                KeyEvent.KEYCODE_BACK -> { ui.bar = false; if (shifted) ui.current?.let { tune(it, immediate = true) }; return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> { if (event.repeatCount == 0) togglePause(); return true }
+                // Up and down still zap while watching live; behind live they would lose your place, so they do nothing.
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN ->
+                    if (shifted) return true else ui.bar = false
+                else -> { showBar(); return super.dispatchKeyEvent(event) }
+            }
+        }
         if (ui.replay != null || ui.behind) when (code) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> { skip(-30_000); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { skip(30_000); return true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                if (event.repeatCount == 0) { if (ui.paused) resume() else pause() }
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                if (event.repeatCount == 0) togglePause()
                 return true
             }
             KeyEvent.KEYCODE_BACK -> { ui.current?.let { tune(it, immediate = true) }; return true }   // back to live
@@ -508,7 +538,28 @@ class LiveActivity : ComponentActivity() {
                 ui.current?.let { Banner(it, numberOf(it), ui.programmes, ui.replay, ui) }
             }
             AnimatedVisibility(ui.guide, enter = slideInHorizontally { -it / 3 } + fadeIn(), exit = slideOutHorizontally { -it / 3 } + fadeOut()) {
-                Guide(ui, channelsOf, onPick, onFavorite, schedule, onReplay, onTimeline, { ui.guide = false; pause() }, { c.sleep.cycle(); ui.sleepLeft = c.sleep.minutesLeft() })
+                Guide(ui, channelsOf, onPick, onFavorite, schedule, onReplay, onTimeline)
+            }
+            // The options bar: what you can do with the channel you are on, as round icons that name themselves.
+            AnimatedVisibility(ui.bar && !ui.guide && !ui.timeline, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
+                val first = remember { FocusRequester() }
+                LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
+                val shifted = ui.behind || ui.replay != null
+                Row(
+                    Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000)))).padding(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    IconAction(if (ui.paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, stringResource(if (ui.paused) R.string.play else R.string.pause), ::togglePause,
+                        Modifier.focusRequester(first), size = 40.dp)
+                    IconAction(Icons.Rounded.Replay30, stringResource(R.string.back_30), { skip(-30_000) }, plain = true)
+                    if (shifted) IconAction(Icons.Rounded.Forward30, stringResource(R.string.forward_30), { skip(30_000) }, plain = true)
+                    if (shifted) IconAction(Icons.Rounded.LiveTv, stringResource(R.string.to_live), { ui.bar = false; ui.current?.let { tune(it, immediate = true) } }, plain = true)
+                    Box(Modifier.weight(1f))
+                    IconAction(Icons.AutoMirrored.Rounded.List, stringResource(R.string.channels), { ui.bar = false; ui.banner = false; ui.guide = true }, plain = true)
+                    IconAction(Icons.Rounded.DateRange, stringResource(R.string.tv_guide), { ui.bar = false; openTimeline() }, plain = true)
+                    IconAction(Icons.Rounded.Bedtime, if (ui.sleepLeft > 0) stringResource(R.string.sleep_in, ui.sleepLeft) else stringResource(R.string.sleep_timer),
+                        { c.sleep.cycle(); ui.sleepLeft = c.sleep.minutesLeft() }, active = ui.sleepLeft > 0, pinned = ui.sleepLeft > 0, plain = true)
+                }
             }
             AnimatedVisibility(ui.timeline, enter = fadeIn(), exit = fadeOut()) {
                 Timeline(ui.grid, ui.zapList, ui.groups.firstOrNull { it.id == ui.zapGroup }?.name ?: "", ui.current?.id, gridSchedule)
@@ -528,7 +579,7 @@ private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEnt
                 val now = programmes.getOrNull(0)
                 if (replay != null) {
                     Text(stringResource(R.string.from_start_banner, hhmm(replay.start), replay.title), style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(ui.hint ?: stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
+                    (ui.hint ?: if (ui.bar) null else stringResource(R.string.replay_keys))?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.Muted) }
                 } else if (ui.behind) {
                     val minutes = (ui.lagMs / 60_000).toInt()
                     val state = when {
@@ -540,7 +591,7 @@ private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEnt
                         androidx.tv.material3.Icon(if (ui.paused) Icons.Rounded.Pause else Icons.Rounded.History, null, Modifier.size(22.dp), tint = Ink.AccentSoft)
                         Text(state, style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(ui.hint ?: stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
+                    (ui.hint ?: if (ui.bar) null else stringResource(R.string.replay_keys))?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.Muted) }
                 } else if (now != null) {
                     Text("${hhmm(now.start)}  ${now.title}", style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ProgressLine(now, Modifier.fillMaxWidth(0.5f))
@@ -569,8 +620,6 @@ private fun Guide(
     schedule: suspend (ChannelEntity) -> List<ProgrammeEntity>,
     onReplay: (ChannelEntity, ProgrammeEntity) -> Unit,
     onTimeline: () -> Unit,
-    onPause: () -> Unit,
-    onSleep: () -> Unit,
 ) {
     var group by remember { mutableStateOf(ui.zapGroup) }
     var channels by remember { mutableStateOf(ui.zapList) }
@@ -587,14 +636,6 @@ private fun Guide(
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item(key = "timeline") {
                 MainButton(stringResource(R.string.tv_guide), onTimeline, Modifier.fillMaxWidth().padding(bottom = 8.dp), icon = Icons.Rounded.DateRange)
-            }
-            // What most remotes have no key for.
-            item(key = "pause") {
-                ChoiceRow(stringResource(R.string.pause), false, onPause, icon = Icons.Rounded.Pause)
-            }
-            item(key = "sleep") {
-                ChoiceRow(if (ui.sleepLeft > 0) stringResource(R.string.sleep_in, ui.sleepLeft) else stringResource(R.string.sleep_timer), ui.sleepLeft > 0, onSleep,
-                    Modifier.padding(bottom = 12.dp), icon = Icons.Rounded.Bedtime)
             }
             items(ui.groups, key = { it.id }) { g ->
                 ChoiceRow(g.name, g.id == group, { group = g.id; if (g.id == ui.zapGroup) channels = ui.zapList })

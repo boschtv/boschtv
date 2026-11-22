@@ -173,6 +173,12 @@ private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, prof
             openLive = { Playback.live(ctx, it) },
         )
     }
+    // Back with nothing left to go back to would close the app, which happens by accident after a few
+    // Backs in a row. The first one only says so; a second one within a few seconds really closes it.
+    // Declared before the other Back handlers, so it is the last to get a turn.
+    var closing by remember { mutableStateOf(false) }
+    LaunchedEffect(closing) { if (closing) { delay(3000); closing = false } }
+    BackHandler(!covered) { if (closing) (ctx as? android.app.Activity)?.finish() else closing = true }
     BackHandler(!covered && (updating || picker || layers.isNotEmpty() || tab != Tab.HOME || scope != null)) {
         when {
             updating -> later()
@@ -226,6 +232,11 @@ private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, prof
         if (picker) ScopePicker(scope) { picked -> scope = picked; tab = Tab.HOME; picker = false }
         if (updating) UpdatePrompt(update, onLater = later)
         SyncBadge(Modifier.align(Alignment.BottomEnd))
+        androidx.compose.animation.AnimatedVisibility(closing, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp)) {
+            Text(stringResource(R.string.back_again), style = MaterialTheme.typography.titleMedium, color = Ink.Text,
+                modifier = Modifier.background(Ink.SurfaceHi.copy(alpha = 0.96f), nl.boschtv.tv.ui.Shape).padding(horizontal = 18.dp, vertical = 10.dp))
+        }
     }
 }
 
