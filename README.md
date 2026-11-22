@@ -41,12 +41,13 @@ New versions are offered by the app itself (Settings → Check for updates).
 - **Services.** Pick a service from the logo top left; the whole app then shows only that service's
   titles.
 - **Genres** with combinable filters for kind, year and sort order.
-- **Player.** Resume, next episode with countdown, subtitles and audio tracks, fast skipping.
+- **Player.** Resume, "Skip intro" and "Skip recap", next episode when the credits start, subtitles and
+  audio tracks, fast skipping.
 - **Live TV.** Last channel on start, up/down zapping, number keys, channel lists, favourites, a
   timeline guide (press ▶), and watching a programme from its beginning where the provider allows it.
 - **Search** with an on-screen keyboard or your voice.
 - **Private.** Your history, list and progress stay on the TV. The app talks only to your provider,
-  to TMDB (posters, trending lists) and to GitHub (update check).
+  to TMDB (posters, trending lists), to TheIntroDB (skip times) and to GitHub (update check).
 
 The app's own texts are Dutch for now; see the roadmap.
 
