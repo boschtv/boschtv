@@ -145,7 +145,7 @@
     <string name="from_start_banner">Baştan  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ 30 saniye atla  ·  OK duraklat  ·  Geri = canlı</string>
     <string name="up_next">Sıradaki  %1$s  %2$s</string>
-    <string name="live_keys">OK  kanallar     OK basılı tut  duraklat     ▶  rehber     ▲▼  kanal değiştir</string>
+    <string name="live_keys">◀  kanallar     OK  seçenekler     ▶  rehber     ▲▼  kanal değiştir</string>
     <string name="tv_guide">TV rehberi</string>
     <string name="no_favorites">Henüz favori yok. Eklemek için bir kanalda OK tuşunu basılı tutun.</string>
     <string name="no_channels_list">Bu listede kanal yok.</string>
@@ -318,4 +318,8 @@
     <string name="episodes">Bölümler</string>
     <string name="episodes_failed">Bölümler yüklenemedi. Yeniden denemek için Oynat\'a bas.</string>
     <string name="back_again">BoschTV\'yi kapatmak için Geri\'ye tekrar bas</string>
+    <string name="back_30">30 sn geri</string>
+    <string name="forward_30">30 sn ileri</string>
+    <string name="to_live">Canlıya dön</string>
+    <string name="channels">Kanallar</string>
 </resources>

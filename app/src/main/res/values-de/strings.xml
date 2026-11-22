@@ -145,7 +145,7 @@
     <string name="from_start_banner">Von vorn  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ 30 Sekunden springen  ·  OK Pause  ·  Zurück = live</string>
     <string name="up_next">Danach  %1$s  %2$s</string>
-    <string name="live_keys">OK  Sender     OK halten  Pause     ▶  Programm     ▲▼  zappen</string>
+    <string name="live_keys">◀  Sender     OK  Optionen     ▶  Programm     ▲▼  zappen</string>
     <string name="tv_guide">TV-Programm</string>
     <string name="no_favorites">Noch keine Favoriten. Halte OK auf einem Sender gedrückt, um ihn hinzuzufügen.</string>
     <string name="no_channels_list">Keine Sender in dieser Liste.</string>
@@ -318,4 +318,8 @@
     <string name="episodes">Folgen</string>
     <string name="episodes_failed">Die Folgen konnten nicht geladen werden. Drücke Abspielen, um es erneut zu versuchen.</string>
     <string name="back_again">Zum Schließen von BoschTV erneut Zurück drücken</string>
+    <string name="back_30">30 s zurück</string>
+    <string name="forward_30">30 s vor</string>
+    <string name="to_live">Zurück zu Live</string>
+    <string name="channels">Sender</string>
 </resources>

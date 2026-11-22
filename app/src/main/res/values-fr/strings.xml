@@ -145,7 +145,7 @@
     <string name="from_start_banner">Depuis le début  ·  %1$s  %2$s</string>
     <string name="replay_keys">◀ ▶ sauter 30 secondes  ·  OK pause  ·  Retour = direct</string>
     <string name="up_next">Ensuite  %1$s  %2$s</string>
-    <string name="live_keys">OK  chaînes     maintenir OK  pause     ▶  guide     ▲▼  zapper</string>
+    <string name="live_keys">◀  chaînes     OK  options     ▶  guide     ▲▼  zapper</string>
     <string name="tv_guide">Guide TV</string>
     <string name="no_favorites">Pas encore de favoris. Maintenez OK sur une chaîne pour l\'ajouter.</string>
     <string name="no_channels_list">Aucune chaîne dans cette liste.</string>
@@ -318,4 +318,8 @@
     <string name="episodes">Épisodes</string>
     <string name="episodes_failed">Impossible de charger les épisodes. Appuyez sur Lire pour réessayer.</string>
     <string name="back_again">Appuyez de nouveau sur Retour pour quitter BoschTV</string>
+    <string name="back_30">Reculer de 30 s</string>
+    <string name="forward_30">Avancer de 30 s</string>
+    <string name="to_live">Revenir au direct</string>
+    <string name="channels">Chaînes</string>
 </resources>

@@ -46,7 +46,7 @@ New versions are offered by the app itself (Settings → Check for updates).
   audio tracks, fast skipping, and "Still watching?" after three episodes nobody touched the remote for. The TV switches to the film's own frame rate when its settings allow it.
 - **Live TV.** Last channel on start, up/down zapping, number keys, channel lists, favourites, a
   timeline guide (press ▶), and watching a programme from its beginning where the provider allows it.
-  Hold OK to pause; rewind on channels with an archive. A sleep timer in the channel list.
+  OK brings up pause, skip, the channel list, the guide and a sleep timer; rewind works on channels with an archive.
 - **Search** with an on-screen keyboard or your voice, in films and series and in the TV guide of
   every channel ("when is the race on?").
 - **More than one subscription.** Add a second line in Settings and switch between them; your history
