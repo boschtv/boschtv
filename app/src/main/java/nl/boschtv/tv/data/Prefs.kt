@@ -40,6 +40,7 @@ class Prefs(private val context: Context) {
         val SERVER_ZONE = stringPreferencesKey("server_zone")
         val PREVIEWS = booleanPreferencesKey("previews")
         val PREVIEW_SOUND = booleanPreferencesKey("preview_sound")
+        val UPDATE_SNOOZE = stringPreferencesKey("update_snooze")
         val SERVICE_LOGOS = stringPreferencesKey("service_logos")
     }
 
@@ -63,6 +64,12 @@ class Prefs(private val context: Context) {
 
     suspend fun serviceLogos(): String? = context.store.data.first()[K.SERVICE_LOGOS]
     suspend fun saveServiceLogos(text: String) = context.store.edit { it[K.SERVICE_LOGOS] = text }
+
+    /** The version whose update window was put off with "Later", while that lasts (24 hours). */
+    val snoozedUpdate: Flow<String?> = context.store.data.map { p ->
+        p[K.UPDATE_SNOOZE]?.split('|')?.takeIf { it.size == 2 && (it[1].toLongOrNull() ?: 0L) > System.currentTimeMillis() }?.get(0)
+    }.distinctUntilChanged()
+    suspend fun snoozeUpdate(version: String) = context.store.edit { it[K.UPDATE_SNOOZE] = "$version|${System.currentTimeMillis() + 24 * 3600_000L}" }
 
     /** Hover previews on the home screens: whether they play, and whether with sound. Both on by default. */
     val previews: Flow<Pair<Boolean, Boolean>> = context.store.data

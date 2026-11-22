@@ -1,5 +1,6 @@
 package nl.boschtv.tv
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.os.Bundle
@@ -122,9 +123,17 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
     var picker by remember { mutableStateOf(false) }
     // A newer version offered by the updater: asked once per version per launch.
     val update by c.updater.state.collectAsState()
+    // The update window only opens right after the app is opened, before anything has been started;
+    // later it would interrupt. Otherwise a dot on the settings icon is enough. "Later" lasts a day.
     var skipped by remember { mutableStateOf<String?>(null) }
+    val snoozed by c.prefs.snoozedUpdate.collectAsState(initial = null)
+    var promptAllowed by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { delay(45_000); promptAllowed = false }
+    val offered = (update as? nl.boschtv.tv.system.Updater.State.Available)?.versionName
+    LaunchedEffect(layers.size, tab) { if (layers.isNotEmpty() || tab != Tab.HOME) promptAllowed = false }
     val updating = update is nl.boschtv.tv.system.Updater.State.Downloading ||
-        (update as? nl.boschtv.tv.system.Updater.State.Available)?.let { it.versionName != skipped } == true
+        (offered != null && promptAllowed && offered != skipped && offered != snoozed)
+    val later = { offered?.let { v -> skipped = v; c.scope.launch { c.prefs.snoozeUpdate(v) } }; Unit }
     val content = remember { FocusRequester() }
     val nav = remember {
         Nav(
@@ -136,7 +145,7 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
     }
     BackHandler(updating || picker || layers.isNotEmpty() || tab != Tab.HOME || scope != null) {
         when {
-            updating -> skipped = (update as? nl.boschtv.tv.system.Updater.State.Available)?.versionName ?: skipped
+            updating -> later()
             picker -> picker = false
             layers.isNotEmpty() -> layers.removeAt(layers.lastIndex)
             tab != Tab.HOME -> tab = Tab.HOME
@@ -167,7 +176,7 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
                 Tab.SETTINGS -> SettingsScreen(content)
                 Tab.LIVE -> Unit
             }
-            TopBar(tab, scope, enabled = front, onScope = { picker = true }) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t }
+            TopBar(tab, scope, enabled = front, updateWaiting = offered != null, onScope = { picker = true }) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t }
         }
         layers.forEachIndexed { i, layer ->
             val top = i == layers.lastIndex && !picker && !updating
@@ -180,7 +189,7 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
             }
         }
         if (picker) ScopePicker(scope) { picked -> scope = picked; tab = Tab.HOME; picker = false }
-        if (updating) UpdatePrompt(update, onLater = { skipped = (update as? nl.boschtv.tv.system.Updater.State.Available)?.versionName })
+        if (updating) UpdatePrompt(update, onLater = later)
         SyncBadge(Modifier.align(Alignment.BottomEnd))
     }
 }
@@ -190,7 +199,7 @@ private fun Modifier.gate(open: Boolean): Modifier =
     focusProperties { enter = { if (open) FocusRequester.Default else FocusRequester.Cancel } }.focusGroup()
 
 @Composable
-private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, onScope: () -> Unit, onSelect: (Tab) -> Unit) {
+private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, updateWaiting: Boolean, onScope: () -> Unit, onSelect: (Tab) -> Unit) {
     // A soft shade behind the bar keeps it readable over bright artwork.
     Box(Modifier.fillMaxWidth().height(104.dp).background(Brush.verticalGradient(listOf(Ink.Bg.copy(alpha = 0.92f), Ink.Bg.copy(alpha = 0.55f), Color.Transparent))))
     Row(
@@ -206,7 +215,11 @@ private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, onScope: ()
         Spacer(Modifier.weight(1f))
         // Live TV is a different mode, so it sits apart on the right, but it is an ordinary item.
         NavItem(stringResource(Tab.LIVE.label), false, Icons.Rounded.LiveTv) { onSelect(Tab.LIVE) }
-        NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings)) { onSelect(Tab.SETTINGS) }
+        // A new version waiting: a small dot on the settings icon, nothing that interrupts.
+        Box {
+            NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings)) { onSelect(Tab.SETTINGS) }
+            if (updateWaiting) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size(9.dp).background(Ink.Accent, CircleShape))
+        }
     }
 }
 

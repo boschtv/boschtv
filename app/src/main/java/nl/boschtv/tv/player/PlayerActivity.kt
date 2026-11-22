@@ -1,5 +1,7 @@
 package nl.boschtv.tv.player
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import nl.boschtv.tv.ui.Texts
 import nl.boschtv.tv.R
 import androidx.compose.ui.res.stringResource
@@ -414,6 +416,7 @@ private fun VodScreen(
 ) {
     val playFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
+    val seekFocus = remember { FocusRequester() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false } },
@@ -434,7 +437,7 @@ private fun VodScreen(
                     }
                 }
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 48.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SeekBar(ui, onSeek)
+                    SeekBar(ui, onSeek, seekFocus)
                     if (!ui.scrubbing) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Pill(stringResource(if (ui.playing) R.string.pause else R.string.play), onToggle, Modifier.focusRequester(playFocus), primary = true,
                             icon = if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow)
@@ -445,8 +448,9 @@ private fun VodScreen(
                 }
             }
         }
-        LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen) {
-            if (ui.visible && !ui.scrubbing && !ui.tracksOpen) { delay(80); runCatching { playFocus.requestFocus() } }
+        // After skipping the time bar keeps the remote (left/right go on skipping); otherwise Play/Pause has it.
+        LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen, ui.seeking) {
+            if (ui.visible && !ui.scrubbing && !ui.tracksOpen) { delay(80); runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() } }
         }
         // Nudge towards the next episode during the credits.
         LaunchedEffect(ui.nearEnd) { if (ui.nearEnd) { ui.visible = true; ui.touched = System.currentTimeMillis(); delay(150); runCatching { nextFocus.requestFocus() } } }
@@ -463,7 +467,7 @@ private fun VodScreen(
 }
 
 @Composable
-private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit) {
+private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester) {
     var focused by remember { mutableStateOf(false) }
     val shown = ui.scrubTo ?: ui.position
     ui.scrubTo?.let { to ->
@@ -477,6 +481,7 @@ private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit) {
         Text(clock(shown), style = MaterialTheme.typography.titleMedium, color = Ink.Text)
         Box(
             Modifier.weight(1f).height(18.dp)
+                .focusRequester(focus)
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -489,6 +494,10 @@ private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit) {
             val f = if (ui.duration > 0) (shown.toFloat() / ui.duration).coerceIn(0f, 1f) else 0f
             Box(Modifier.fillMaxWidth().height(if (big) 8.dp else 4.dp).clip(CircleShape).background(Color(0x55FFFFFF)))
             Box(Modifier.fillMaxWidth(f).height(if (big) 8.dp else 4.dp).clip(CircleShape).background(if (big) Ink.Text else Ink.Accent))
+            // Where you are, while the bar has the remote: left/right move it, Down goes to the buttons.
+            if (big) BoxWithConstraints(Modifier.fillMaxWidth()) {
+                Box(Modifier.offset(x = maxWidth * f - 9.dp).size(18.dp).clip(CircleShape).background(Ink.Text))
+            }
         }
         Text(if (ui.duration > 0) "-" + clock(ui.duration - shown) else "", style = MaterialTheme.typography.titleMedium, color = Ink.Soft)
     }
