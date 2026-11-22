@@ -184,7 +184,7 @@ class SyncManager(
             val id = (if (kind == KIND_MOVIE) o.long("stream_id") else o.long("series_id")) ?: return@forEach
             val clean = Titles.clean(o.str("name") ?: return@forEach)
             val year = clean.year ?: (o.str("releaseDate") ?: o.str("release_date") ?: o.str("year"))?.take(4)?.toIntOrNull()
-            val tmdb = (o.str("tmdb") ?: o.str("tmdb_id"))?.takeIf { it != "0" }
+            val tmdb = Titles.tmdbId(o.str("tmdb")) ?: Titles.tmdbId(o.str("tmdb_id"))
             val seriesDub = kind == KIND_SERIES && clean.dubbed
             val key = buildString {
                 append(prefix).append(':')

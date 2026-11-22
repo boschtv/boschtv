@@ -112,6 +112,13 @@ object Titles {
     }
 
     /** True for "☰☰☰ NL JEUGD PAKKET ☰☰☰"-style divider rows in channel lists. */
+    /**
+     * The provider's TMDB id, only when it really is one: digits, not zero. Some lists carry an IMDb id
+     * ("tt0111161") or other text in that field; a key built from it would match nothing.
+     */
+    fun tmdbId(raw: String?): String? =
+        raw?.trim()?.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.trimStart('0')?.takeIf { it.isNotEmpty() }
+
     fun isDivider(raw: String): Boolean {
         val t = raw.trim()
         if (t.isEmpty()) return true

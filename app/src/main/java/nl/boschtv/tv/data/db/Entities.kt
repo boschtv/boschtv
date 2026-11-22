@@ -21,7 +21,7 @@ const val KIND_SERIES = 1
     ],
 )
 data class TitleEntity(
-    @PrimaryKey val key: String,          // "m:t<tmdb>" | "m:<streamId>" | "s:t<tmdb>" | "s:<seriesId>"
+    @PrimaryKey val key: String,          // "m:t<tmdb>" | "m:n:<name>:<year>" | "s:t<tmdb>" | "s:n:<name>:<year>": the same on every provider
     val kind: Int,
     val sourceId: Long,                   // stream id (film) or series id of the preferred version
     val name: String,
@@ -126,10 +126,6 @@ data class ChannelEntity(
 @Entity(tableName = "channel_groups")
 data class ChannelGroupEntity(@PrimaryKey val id: String, val name: String, val sort: Int)
 
-/** A live channel starred by one profile. */
-@Entity(tableName = "favorites", primaryKeys = ["profileId", "channelId"])
-data class FavoriteEntity(val profileId: Long, val channelId: Long, val addedAt: Long)
-
 @Entity(tableName = "programmes", primaryKeys = ["channelId", "start"], indices = [Index("channelId", "stop")])
 data class ProgrammeEntity(
     val channelId: Long,
@@ -139,49 +135,6 @@ data class ProgrammeEntity(
     val description: String?,
 )
 
-/** Playback position per profile and film or episode. Finished rows are kept: they feed the recommendations. */
-@Entity(
-    tableName = "progress", primaryKeys = ["profileId", "contentId"],
-    indices = [Index("profileId", "titleKey"), Index("profileId", "updatedAt")],
-)
-data class ProgressEntity(
-    val profileId: Long,
-    val contentId: String,    // "m:<titleKey>" for films, "e:<episodeId>" for episodes
-    val titleKey: String,
-    val episodeId: String?,
-    val season: Int?,
-    val number: Int?,
-    val label: String?,                   // "S1 · A2 · Titel"
-    val image: String?,
-    val streamId: Long?,                  // chosen film version
-    val container: String?,
-    val positionMs: Long,
-    val durationMs: Long,
-    val finished: Boolean,
-    val updatedAt: Long,
-)
-
-@Entity(tableName = "my_list", primaryKeys = ["profileId", "titleKey"])
-data class MyListEntity(val profileId: Long, val titleKey: String, val addedAt: Long)
-
 /** Ranked lists from TMDB: "trend" (this week, everything) and "svc:<SERVICE>" (new and popular on a service in NL). */
 @Entity(tableName = "trending", primaryKeys = ["listId", "rank"])
 data class TrendEntity(val listId: String, val rank: Int, val titleKey: String)
-
-/** Thumbs up / down, per profile. */
-@Entity(tableName = "ratings", primaryKeys = ["profileId", "titleKey"])
-data class RatingEntity(val profileId: Long, val titleKey: String, val liked: Boolean, val at: Long)
-
-/**
- * One person on this TV. History, My List, thumbs and favourite channels belong to a profile, so each
- * person gets their own "Continue watching" and recommendations. The avatar is an emoji on one of the
- * gradients in `ui/Profiles.kt` ([color] is its index).
- */
-@Entity(tableName = "profiles")
-data class ProfileEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String,
-    val avatar: String,
-    val color: Int,
-    val createdAt: Long = System.currentTimeMillis(),
-)

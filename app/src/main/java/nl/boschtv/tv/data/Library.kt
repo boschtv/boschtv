@@ -3,17 +3,26 @@ package nl.boschtv.tv.data
 import nl.boschtv.tv.R
 import nl.boschtv.tv.ui.Texts
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import nl.boschtv.tv.core.Genre
 import nl.boschtv.tv.core.Service
-import nl.boschtv.tv.data.db.AppDatabase
+import nl.boschtv.tv.data.db.ChannelDao
+import nl.boschtv.tv.data.db.ChannelEntity
+import nl.boschtv.tv.data.db.ContentIds
 import nl.boschtv.tv.data.db.EpisodeEntity
+import nl.boschtv.tv.data.db.FavoriteEntity
 import nl.boschtv.tv.data.db.KIND_MOVIE
 import nl.boschtv.tv.data.db.MyListEntity
 import nl.boschtv.tv.data.db.ProgressEntity
 import nl.boschtv.tv.data.db.RatingEntity
 import nl.boschtv.tv.data.db.TitleEntity
+import nl.boschtv.tv.data.db.UserDatabase
 import kotlin.math.exp
 import kotlin.math.sqrt
 
@@ -38,9 +47,12 @@ class Taste(
     }
 }
 
-/** Watch progress, "Continue watching", next/new episodes, My List and thumbs. */
-class Library(private val db: AppDatabase, private val catalog: Catalog, private val profiles: Profiles) {
-    private val dao get() = db.library()
+/**
+ * Watch progress, "Continue watching", next/new episodes, My List, thumbs and favourite channels.
+ * Every change to what a profile made goes through here.
+ */
+class Library(private val user: UserDatabase, private val channels: ChannelDao, private val catalog: Catalog, private val profiles: Profiles) {
+    private val dao get() = user.library()
     val version = MutableStateFlow(0)
 
     /** Everything read or written here is the active profile's. */
@@ -49,38 +61,39 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
     /** Screens that show the library rebuild; also called when another profile starts watching. */
     fun changed() { version.value++ }
 
+    /** [contentId] comes from [ContentIds]. */
     suspend fun progress(contentId: String): ProgressEntity? = withContext(Dispatchers.IO) { dao.progress(pid(), contentId) }
     suspend fun progressOf(titleKey: String): List<ProgressEntity> = withContext(Dispatchers.IO) { dao.progressOf(pid(), titleKey) }
 
     suspend fun saveMovie(t: TitleEntity, streamId: Long, container: String?, positionMs: Long, durationMs: Long) =
         save(ProgressEntity(
-            profileId = pid(), contentId = "m:${t.key}", titleKey = t.key, episodeId = null, season = null, number = null, label = null,
+            profileId = pid(), contentId = ContentIds.movie(t.key), titleKey = t.key, season = null, number = null, label = null,
             image = t.dBackdrop ?: t.pBackdrop, streamId = streamId, container = container,
             positionMs = positionMs, durationMs = durationMs, finished = false, updatedAt = 0,
         ))
 
-    suspend fun saveEpisode(e: EpisodeEntity, positionMs: Long, durationMs: Long) = save(episodeRow(pid(), e, positionMs, durationMs))
+    suspend fun saveEpisode(e: EpisodeEntity, positionMs: Long, durationMs: Long) = save(episodeRow(pid(), e, positionMs, durationMs), e)
 
     private fun episodeRow(profile: Long, e: EpisodeEntity, positionMs: Long, durationMs: Long) = ProgressEntity(
-        profileId = profile, contentId = "e:${e.id}", titleKey = e.titleKey, episodeId = e.id, season = e.season, number = e.number,
-        label = Texts.get(R.string.episode_line, e.season, e.number, e.name), image = e.image, streamId = null, container = e.container,
+        profileId = profile, contentId = ContentIds.of(e), titleKey = e.titleKey, season = e.season, number = e.number,
+        label = Texts.get(R.string.episode_line, e.season, e.number, e.name), image = e.image, streamId = null, container = null,
         positionMs = positionMs, durationMs = durationMs, finished = false, updatedAt = 0,
     )
 
-    private suspend fun save(p: ProgressEntity) = withContext(Dispatchers.IO) {
+    private suspend fun save(p: ProgressEntity, episode: EpisodeEntity? = null) = withContext(Dispatchers.IO) {
         val dur = p.durationMs.coerceAtLeast(0)
         // Under a minute in: not worth a "Continue watching" tile yet.
         if (p.positionMs < 60_000 && dao.progress(p.profileId, p.contentId) == null) return@withContext
         val finished = dur > 0 && (p.positionMs >= dur * 0.93 || dur - p.positionMs < 120_000 && dur > 600_000)
         dao.saveProgress(p.copy(durationMs = dur, finished = finished, updatedAt = System.currentTimeMillis()))
-        if (finished && p.episodeId != null) queueNext(p.profileId, p.titleKey, p.episodeId)
+        if (finished && episode != null) queueNext(p.profileId, episode)
         changed()
     }
 
     /** Finishing an episode puts the next one in "Continue watching". */
-    private suspend fun queueNext(profile: Long, titleKey: String, finishedId: String) {
-        val next = nextEpisode(titleKey, finishedId) ?: return
-        if (dao.progress(profile, "e:${next.id}") == null) {
+    private suspend fun queueNext(profile: Long, finished: EpisodeEntity) {
+        val next = nextEpisode(finished.titleKey, finished.id) ?: return
+        if (dao.progress(profile, ContentIds.of(next)) == null) {
             dao.saveProgress(episodeRow(profile, next, 0, next.durationSecs * 1000).copy(updatedAt = System.currentTimeMillis()))
         }
     }
@@ -101,7 +114,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
     }
 
     private suspend fun refreshNextUp(profile: Long): Boolean {
-        val bySeries = dao.recentProgress(profile, 400).filter { it.episodeId != null }.groupBy { it.titleKey }
+        val bySeries = dao.recentProgress(profile, 400).filter { it.isEpisode }.groupBy { it.titleKey }
         var added = false
         for ((key, rows) in bySeries.entries.take(40)) {
             if (rows.any { !it.finished }) continue
@@ -109,7 +122,7 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
             catalog.detail(key, maxAgeMs = 3600_000L) ?: continue
             val eps = catalog.episodes(key)
             val next = eps.firstOrNull { it.season * 10_000 + it.number > (last.season ?: 0) * 10_000 + (last.number ?: 0) } ?: continue
-            if (dao.progress(profile, "e:${next.id}") != null) continue
+            if (dao.progress(profile, ContentIds.of(next)) != null) continue
             dao.saveProgress(episodeRow(profile, next, 0, next.durationSecs * 1000).copy(
                 label = nl.boschtv.tv.ui.Texts.get(nl.boschtv.tv.R.string.new_episode, next.season, next.number), updatedAt = System.currentTimeMillis(),
             ))
@@ -145,10 +158,12 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
         val eps = catalog.episodes(titleKey)
         if (eps.isEmpty()) return@withContext null
         val rows = dao.progressOf(pid(), titleKey).sortedByDescending { it.updatedAt }
+        // The history knows an episode by season and number; which video that is comes from the current catalog.
+        fun indexOf(p: ProgressEntity) = eps.indexOfFirst { it.season == p.season && it.number == p.number }
         val current = rows.firstOrNull { !it.finished }
-        if (current != null) eps.firstOrNull { it.id == current.episodeId }?.let { return@withContext it to current.positionMs }
+        if (current != null) eps.getOrNull(indexOf(current))?.let { return@withContext it to current.positionMs }
         val lastDone = rows.firstOrNull { it.finished }
-        val next = lastDone?.episodeId?.let { id -> eps.getOrNull(eps.indexOfFirst { it.id == id } + 1) }
+        val next = lastDone?.let { eps.getOrNull(indexOf(it) + 1) }
         (next ?: eps.first()) to 0L
     }
 
@@ -173,6 +188,28 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
         val profile = pid()
         if (liked == null) dao.unrate(profile, key) else dao.rate(RatingEntity(profile, key, liked, System.currentTimeMillis()))
         changed()
+    }
+
+    /* ---------- favourite channels ---------- */
+
+    private suspend fun found(favorites: List<FavoriteEntity>): Map<FavoriteEntity, List<ChannelEntity>> =
+        matchFavorites(favorites, channels.byNames(favorites.map { it.channel }), channels.byEpgIds(favorites.mapNotNull { it.epgId }))
+
+    /** The active profile's favourites as they are in the current channel list, in the order they were starred. */
+    suspend fun favoriteChannels(): List<ChannelEntity> = withContext(Dispatchers.IO) {
+        found(dao.favorites(pid())).values.mapNotNull { it.firstOrNull() }.distinctBy { it.id }
+    }
+
+    /** Ids of every channel that shows a star for the active profile. */
+    fun favoriteChannelIds(): Flow<Set<Long>> = flow {
+        emitAll(dao.observeFavorites(pid()).map { favs -> found(favs).values.flatMapTo(HashSet()) { list -> list.map { it.id } } })
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun toggleFavorite(ch: ChannelEntity) = withContext(Dispatchers.IO) {
+        val profile = pid()
+        val starred = found(dao.favorites(profile)).entries.firstOrNull { (_, list) -> list.any { it.id == ch.id } }?.key
+        if (starred != null) dao.removeFavorite(profile, starred.channel)
+        else if (ch.search.isNotBlank()) dao.addFavorite(FavoriteEntity(profile, ch.search, ch.epgId?.takeIf { it.isNotBlank() }, System.currentTimeMillis()))
     }
 
     suspend fun taste(): Taste = withContext(Dispatchers.IO) {
@@ -211,3 +248,21 @@ class Library(private val db: AppDatabase, private val catalog: Catalog, private
 }
 
 val Card.kindLabel get() = nl.boschtv.tv.ui.Texts.get(if (kind == KIND_MOVIE) nl.boschtv.tv.R.string.kind_movie else nl.boschtv.tv.R.string.kind_series)
+
+/**
+ * Which channels of the current list each favourite stands for. A favourite is a channel name: every
+ * channel carrying that name ([byName], the list sorted as on screen) is it. Only when no channel has the
+ * name any more (another provider writes it differently) does the guide id decide, and then the first
+ * channel with that id ([byEpgId]) is taken, not all its HD and 4K variants. Favourites without a channel are left out.
+ */
+internal fun matchFavorites(
+    favorites: List<FavoriteEntity>, byName: List<ChannelEntity>, byEpgId: List<ChannelEntity>,
+): Map<FavoriteEntity, List<ChannelEntity>> {
+    val names = byName.groupBy { it.search }
+    val out = LinkedHashMap<FavoriteEntity, List<ChannelEntity>>()
+    for (f in favorites) {
+        val list = names[f.channel] ?: f.epgId?.let { id -> byEpgId.firstOrNull { it.epgId == id } }?.let(::listOf) ?: continue
+        out[f] = list
+    }
+    return out
+}

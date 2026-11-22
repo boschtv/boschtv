@@ -121,5 +121,14 @@ class Prefs(private val context: Context) {
     suspend fun lastChannel(): Pair<Long?, String?> = context.store.data.first().let { it[K.LAST_CHANNEL] to it[K.LAST_GROUP] }
     suspend fun saveLastChannel(id: Long, group: String) = context.store.edit { it[K.LAST_CHANNEL] = id; it[K.LAST_GROUP] = group }
 
-    suspend fun logout() = context.store.edit { it.clear() }
+    /**
+     * Forgets the IPTV subscription and everything that was learned about that provider. What belongs to
+     * the people on this TV stays: language and preview choices, and who is watching.
+     */
+    suspend fun logout() = context.store.edit {
+        listOf(
+            K.HOST, K.USER, K.PASS, K.EXPIRES, K.MAX_CONN, K.TRIAL, K.PROBLEM, K.SERVER_ZONE, K.LIVE_EXT,
+            K.LAST_SYNC, K.LAST_TRENDS, K.SYNC_REPORT, K.LAST_CHANNEL, K.LAST_GROUP,
+        ).forEach { key -> it.remove(key) }
+    }
 }

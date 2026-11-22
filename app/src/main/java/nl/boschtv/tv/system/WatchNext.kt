@@ -39,7 +39,7 @@ class WatchNext(private val context: Context, private val catalog: Catalog, priv
             for (p in wanted) {
                 val card = cards.getValue(p.titleKey)
                 val b = WatchNextProgram.Builder()
-                    .setType(if (p.episodeId != null) WatchNextPrograms.TYPE_TV_EPISODE else WatchNextPrograms.TYPE_MOVIE)
+                    .setType(if (p.isEpisode) WatchNextPrograms.TYPE_TV_EPISODE else WatchNextPrograms.TYPE_MOVIE)
                     .setWatchNextType(if (p.positionMs > 0) WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE else WatchNextPrograms.WATCH_NEXT_TYPE_NEXT)
                     .setTitle(card.title)
                     .setInternalProviderId(p.titleKey)

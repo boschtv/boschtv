@@ -125,7 +125,7 @@ fun SettingsScreen(focus: FocusRequester) {
             Heading(stringResource(R.string.data))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(stringResource(R.string.clear_history), { scope.launch { c.library.clearHistory(); note = Texts.get(R.string.history_cleared) } }, selected = true)
-                Pill(if (confirmLogout) stringResource(R.string.sure_again) else stringResource(R.string.log_out), { if (confirmLogout) scope.launch { c.prefs.logout() } else confirmLogout = true }, selected = true, primary = confirmLogout)
+                Pill(if (confirmLogout) stringResource(R.string.sure_again) else stringResource(R.string.log_out), { if (confirmLogout) scope.launch { c.logout() } else confirmLogout = true }, selected = true, primary = confirmLogout)
             }
             note?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.AccentSoft, modifier = Modifier.padding(top = 8.dp)) }
 

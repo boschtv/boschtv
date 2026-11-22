@@ -12,13 +12,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.boschtv.tv.R
-import nl.boschtv.tv.data.db.AppDatabase
+import nl.boschtv.tv.data.db.UserDatabase
 import nl.boschtv.tv.data.db.ProfileEntity
 import nl.boschtv.tv.ui.Avatars
 import nl.boschtv.tv.ui.Texts
 
 /** The people on this TV, and which of them is watching. There is always at least one. */
-class Profiles(private val db: AppDatabase, private val prefs: Prefs, scope: CoroutineScope) {
+class Profiles(private val db: UserDatabase, private val prefs: Prefs, scope: CoroutineScope) {
     private val dao get() = db.profiles()
 
     /** Every profile in the order they were made; null until the database has answered. */

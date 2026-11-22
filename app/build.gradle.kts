@@ -110,6 +110,11 @@ tasks.withType<Test>().configureEach {
     }
 }
 
+// The user database's schema per version (app/schemas, in git): what a migration is written and checked against.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // AGP 9 compiles Kotlin itself (no separate Kotlin Android plugin); options go here.
 kotlin {
     compilerOptions {
