@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         TitleEntity::class, EpisodeEntity::class, ChannelEntity::class, ChannelGroupEntity::class,
         ProgrammeEntity::class, TrendEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,7 +36,14 @@ abstract class AppDatabase : RoomDatabase() {
                         db.execSQL("ALTER TABLE `titles` ADD COLUMN `lPlot` TEXT")
                         db.execSQL("ALTER TABLE `titles` ADD COLUMN `lPlotLocale` TEXT")
                     }
-                }, USER_DATA_MOVED_OUT(5), USER_DATA_MOVED_OUT(6))
+                }, USER_DATA_MOVED_OUT(5), USER_DATA_MOVED_OUT(6), object : androidx.room.migration.Migration(7, 8) {
+                    // Up to 2.5.8 an episode list could outlive a switch to another version of its series
+                    // (after a change of content language): drop them all once, they are fetched again.
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("DELETE FROM episodes")
+                        db.execSQL("UPDATE titles SET detailAt = 0")
+                    }
+                })
                 .fallbackToDestructiveMigration()
                 .build()
     }
