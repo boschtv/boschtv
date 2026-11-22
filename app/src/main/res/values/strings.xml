@@ -104,7 +104,7 @@
     <string name="app">App</string>
     <string name="version">Version</string>
     <string name="open_source">Open source (MIT) · github.com/boschtv/boschtv · licenses of the software used are listed there.</string>
-    <string name="tmdb_credit">Uses the TMDB API but is not endorsed or certified by TMDB. Streaming-service data: JustWatch. Skip times: TheIntroDB.</string>
+    <string name="tmdb_credit">Uses the TMDB API but is not endorsed or certified by TMDB. Streaming-service data: JustWatch. Skip times: TheIntroDB and IntroDB.</string>
     <string name="update_to">Update to %1$s</string>
     <string name="check_updates">Check for updates</string>
     <string name="checking">Checking…</string>

@@ -49,7 +49,7 @@ class AppContainer(app: Application) {
     val enricher = Enricher(db, catalog)
     val watchNext = WatchNext(app, catalog, library)
     val updater = nl.boschtv.tv.system.Updater(app, http)
-    val skips = nl.boschtv.tv.data.SkipTimes(http)
+    val skips = nl.boschtv.tv.data.SkipTimes(http, BuildConfig.TMDB_TOKEN)
 
     init {
         // Another profile starts watching: its own rows everywhere, and its own row on the Google TV home screen.
