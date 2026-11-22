@@ -88,7 +88,8 @@ import nl.boschtv.tv.ui.IconAction
 import nl.boschtv.tv.ui.MainButton
 import java.util.Locale
 
-data class TrackOption(val label: String, val selected: Boolean, val select: () -> Unit)
+/** [folded]: not in the viewer's languages, so it sits behind "More languages" until asked for. */
+data class TrackOption(val label: String, val selected: Boolean, val folded: Boolean = false, val select: () -> Unit)
 
 /** Observable state of the film/series player. */
 class VodUi {
@@ -189,6 +190,8 @@ class PlayerActivity : ComponentActivity() {
     private var unattended = 0
     private var stillJob: kotlinx.coroutines.Job? = null
     private var skipKind: Int? = null
+    /** The viewer's languages for subtitles and sound, most wanted first: these head the track lists. */
+    private var languages = listOf(Locale.getDefault().language, "en").distinct()
     private var skipSince = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -223,6 +226,10 @@ class PlayerActivity : ComponentActivity() {
             VodActions(::keepWatching)) { finish() } } }
         lifecycleScope.launch { load() }
         lifecycleScope.launch { sleepCheck = c.prefs.sleepCheck.first() }
+        lifecycleScope.launch {
+            languages = listOf(c.prefs.content().home.locale.substringBefore('-'), Locale.getDefault().language, "en").distinct()
+            if (!released) readTracks(player.currentTracks)
+        }
         lifecycleScope.launch {
             var tick = 0
             while (isActive) {
@@ -399,17 +406,35 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun readTracks(tracks: Tracks) {
-        fun options(type: Int): List<TrackOption> = tracks.groups.filter { it.type == type }.flatMap { g ->
-            (0 until g.length).filter { g.isTrackSupported(it) }.map { i ->
-                val f = g.getTrackFormat(i)
-                val lang = f.language?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale.getDefault()) }?.replaceFirstChar(Char::uppercase)
-                val label = listOfNotNull(lang ?: f.label ?: Texts.get(R.string.track_n, i + 1), f.label?.takeIf { lang != null && it != lang }).joinToString(" · ")
-                TrackOption(label, g.isTrackSelected(i)) {
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(type, false)
-                        .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+        fun options(type: Int): List<TrackOption> {
+            class Found(val info: nl.boschtv.tv.core.TrackInfo, val label: String, val selected: Boolean, val select: () -> Unit)
+            val found = tracks.groups.filter { it.type == type }.flatMap { g ->
+                (0 until g.length).filter { g.isTrackSupported(it) }.map { i ->
+                    val f = g.getTrackFormat(i)
+                    val info = nl.boschtv.tv.core.TrackInfo(
+                        language = f.language, name = f.label,
+                        forced = f.selectionFlags and C.SELECTION_FLAG_FORCED != 0 || nl.boschtv.tv.core.TrackList.forced(f.label),
+                        hearingImpaired = f.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0 || nl.boschtv.tv.core.TrackList.hearingImpaired(f.label),
+                    )
+                    val lang = f.language?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale.getDefault()) }?.replaceFirstChar(Char::uppercase)
+                    // What kind of track it is in our own words; otherwise the file's own name when it adds something.
+                    val kind = when {
+                        info.forced -> Texts.get(R.string.track_forced)
+                        info.hearingImpaired -> Texts.get(R.string.track_sdh)
+                        else -> f.label?.takeIf { lang != null && !it.equals(lang, ignoreCase = true) && it.length <= 28 }
+                    }
+                    Found(info, listOfNotNull(lang ?: f.label ?: Texts.get(R.string.track_n, i + 1), kind).joinToString(" · "), g.isTrackSelected(i)) {
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(type, false)
+                            .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+                    }
                 }
             }
+            val infos = found.map { it.info }
+            val folded = nl.boschtv.tv.core.TrackList.folded(infos, languages)
+            val order = nl.boschtv.tv.core.TrackList.order(infos, languages)
+            val labels = nl.boschtv.tv.core.TrackList.distinct(order.map { found[it].label })
+            return order.mapIndexed { n, i -> TrackOption(labels[n], found[i].selected, folded = i in folded, select = found[i].select) }
         }
         ui.audio = options(C.TRACK_TYPE_AUDIO)
         val text = options(C.TRACK_TYPE_TEXT)
@@ -642,24 +667,26 @@ private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester, be
 private fun TrackPanel(ui: VodUi, modifier: Modifier) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
+    // The languages you did not ask for stay folded away until you open them.
+    var allText by remember { mutableStateOf(false) }
+    var allAudio by remember { mutableStateOf(false) }
     LazyColumn(
         modifier.fillMaxHeight().width(360.dp).background(Ink.Bg.copy(alpha = 0.96f)).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        if (ui.text.isNotEmpty()) {
-            item { Text(stringResource(R.string.subtitles), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(bottom = 6.dp)) }
-            items(ui.text.size) { i ->
-                val o = ui.text[i]
-                ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0) Modifier.focusRequester(first) else Modifier)
+        fun section(title: Int, all: List<TrackOption>, open: Boolean, onOpen: () -> Unit, top: Boolean, focusFirst: Boolean) {
+            if (all.isEmpty()) return
+            val shown = all.filter { open || !it.folded || it.selected }
+            item { Text(stringResource(title), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = if (top) 0.dp else 16.dp, bottom = 6.dp)) }
+            items(shown.size) { i ->
+                val o = shown[i]
+                ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0 && focusFirst) Modifier.focusRequester(first) else Modifier)
             }
+            val hidden = all.size - shown.size
+            if (hidden > 0) item { ChoiceRow(stringResource(R.string.more_languages, hidden), false, onOpen) }
         }
-        if (ui.audio.isNotEmpty()) {
-            item { Text(stringResource(R.string.audio), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)) }
-            items(ui.audio.size) { i ->
-                val o = ui.audio[i]
-                ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0 && ui.text.isEmpty()) Modifier.focusRequester(first) else Modifier)
-            }
-        }
+        section(R.string.subtitles, ui.text, allText, { allText = true }, top = true, focusFirst = true)
+        section(R.string.audio, ui.audio, allAudio, { allAudio = true }, top = ui.text.isEmpty(), focusFirst = ui.text.isEmpty())
     }
 }
 

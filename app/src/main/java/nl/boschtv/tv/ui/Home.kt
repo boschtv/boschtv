@@ -225,6 +225,7 @@ private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var url by remember { mutableStateOf<String?>(null) }
     var startMs by remember { androidx.compose.runtime.mutableLongStateOf(INTRO_SKIP_MS) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(card?.key) {
         url = null
         val key = card?.key ?: return@LaunchedEffect
@@ -234,6 +235,9 @@ private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
         val resume = runCatching { c.library.progressOf(key).filter { !it.finished }.maxByOrNull { it.updatedAt } }.getOrNull()
         val resumeUrl = resume?.let { runCatching { c.catalog.resumeUrl(it) }.getOrNull() }
         startMs = if (resumeUrl != null && resume.positionMs > 0) (resume.positionMs - 3_000).coerceAtLeast(0) else INTRO_SKIP_MS
+        // The screen can be left while the lines above wait (Home button, another app): starting now
+        // would play sound behind whatever is on screen, with nothing left to stop it.
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@LaunchedEffect
         url = resumeUrl ?: runCatching { c.catalog.previewUrl(key) }.getOrNull()
         delay(30_000)   // a taste, not the whole film: then back to the artwork
         url = null
