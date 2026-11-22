@@ -1,5 +1,7 @@
 package nl.boschtv.tv.ui
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import nl.boschtv.tv.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
@@ -87,6 +89,8 @@ fun DetailScreen(key: String, nav: Nav) {
     var season by remember(key) { mutableIntStateOf(-1) }
     val playFocus = remember { FocusRequester() }
     var inRows by remember(key) { mutableStateOf(false) }
+    /** Set once focus has been in the rows: only then does entering the buttons mean "coming up from below". */
+    var inRowsBefore by remember(key) { mutableStateOf(false) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     var titleLines by remember(key) { mutableIntStateOf(1) }
 
@@ -145,7 +149,13 @@ fun DetailScreen(key: String, nav: Nav) {
                     t.actors?.let { Text(stringResource(R.string.with_cast, it), style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 
                     // The buttons may run wider than the text column above them.
-                    Row(Modifier.padding(top = 10.dp).wrapContentWidth(Alignment.Start, unbounded = true), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Coming up from the rows below: always the first button (Play / Continue), not the one that
+                    // happens to sit above the tile. Moving left and right inside the row is left alone.
+                    var buttonsHadFocus by remember { mutableStateOf(false) }
+                    Row(Modifier.padding(top = 10.dp).wrapContentWidth(Alignment.Start, unbounded = true)
+                        .onFocusChanged { f -> if (f.hasFocus && !buttonsHadFocus && inRowsBefore) runCatching { playFocus.requestFocus() }; buttonsHadFocus = f.hasFocus }
+                        .focusGroup(),   // so the row knows when focus is anywhere inside it, not only on its first button
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (t.kind == KIND_MOVIE) {
                             val p = progress["m:${t.key}"]?.takeIf { !it.finished && it.positionMs > 0 }
                             val left = p?.let { (it.durationMs - it.positionMs) / 60_000 }
@@ -176,7 +186,7 @@ fun DetailScreen(key: String, nav: Nav) {
                     }
                 }
             }
-            WithPivot(44.dp) { LazyColumn(Modifier.fillMaxSize().onFocusChanged { inRows = it.hasFocus }
+            WithPivot(44.dp) { LazyColumn(Modifier.fillMaxSize().onFocusChanged { if (it.hasFocus) inRowsBefore = true; inRows = it.hasFocus }
                 // Up from the top row goes back to the play button (which also expands the header again).
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) {

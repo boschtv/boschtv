@@ -1,5 +1,6 @@
 package nl.boschtv.tv.player
 
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.BoxWithConstraints
 import nl.boschtv.tv.ui.Texts
@@ -437,7 +438,7 @@ private fun VodScreen(
                     }
                 }
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 48.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SeekBar(ui, onSeek, seekFocus)
+                    SeekBar(ui, onSeek, seekFocus, playFocus)
                     if (!ui.scrubbing) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Pill(stringResource(if (ui.playing) R.string.pause else R.string.play), onToggle, Modifier.focusRequester(playFocus), primary = true,
                             icon = if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow)
@@ -467,7 +468,7 @@ private fun VodScreen(
 }
 
 @Composable
-private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester) {
+private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester, below: FocusRequester) {
     var focused by remember { mutableStateOf(false) }
     val shown = ui.scrubTo ?: ui.position
     ui.scrubTo?.let { to ->
@@ -482,6 +483,8 @@ private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester) {
         Box(
             Modifier.weight(1f).height(18.dp)
                 .focusRequester(focus)
+                // Down goes to the first button, not to whichever button happens to sit under the middle of the bar.
+                .focusProperties { down = below }
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onKeyEvent false

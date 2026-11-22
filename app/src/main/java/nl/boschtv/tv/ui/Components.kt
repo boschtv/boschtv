@@ -346,12 +346,12 @@ fun duration(secs: Long): String = when {
 @Composable
 fun NavItem(
     label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    description: String = label, onClick: () -> Unit,
+    description: String = label, modifier: Modifier = Modifier, onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = Modifier.height(40.dp).then(androidx.compose.ui.Modifier).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.then(Modifier.height(40.dp).then(androidx.compose.ui.Modifier).onFocusChanged { focused = it.isFocused }),
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(PillShape),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
