@@ -169,15 +169,24 @@ class Recommender(private val catalog: Catalog, private val library: Library, pr
         }
 
     private fun score(c: Card, taste: Taste, now: LocalDateTime): Float {
-        val ageDays = ((System.currentTimeMillis() / 1000 - c.addedTs) / 86_400.0).coerceAtLeast(0.0)
         val jitter = ((c.key.hashCode() * 31 + now.dayOfYear) and 0xFF) / 255f * 0.3f
         return taste.genreScore(c.genres) * 1.4f + taste.serviceScore(c.services) * 0.4f +
-            (c.rating / 10.0).toFloat() * 0.7f + exp(-ageDays / 120.0).toFloat() * 0.9f +
+            (c.rating / 10.0).toFloat() * 0.7f + fresh(c, now) * 0.9f +
             // Trending this week counts most, more the higher it stands.
             (hot[c.key]?.let { 1.0f - it / 200f } ?: 0f) +
             // In the provider's current top list or in cinemas now: popular at this moment, not all-time.
             (if (c.flags and Flags.TOP != 0) 0.6f else 0f) + (if (c.flags and Flags.CINEMA != 0) 0.3f else 0f) +
             (if (c.lang == 0) 0.3f else 0f) + jitter
+    }
+
+    /**
+     * How new a title is, 1 for just added down to 0. A series only counts as new when it started
+     * recently: the provider's date moves with every extra episode, so a daily soap would look new forever.
+     */
+    private fun fresh(c: Card, now: LocalDateTime): Float {
+        if (c.kind == KIND_SERIES && (c.year == null || c.year < now.year - 1)) return 0f
+        val ageDays = ((System.currentTimeMillis() / 1000 - c.addedTs) / 86_400.0).coerceAtLeast(0.0)
+        return exp(-ageDays / 120.0).toFloat()
     }
 
     /** Orders a pool by taste, rating and freshness, with a small daily shuffle so rows do not go stale. */
@@ -200,15 +209,13 @@ class Recommender(private val catalog: Catalog, private val library: Library, pr
             catalog.cards(base.copy(genresAll = base.genresAll or g.bit, sort = Sort.RATING, minRating = 6.5, limit = 70)).forEach { pool[it.key] = it }
         }
         catalog.cards(base.copy(limit = 80)).forEach { pool[it.key] = it }
-        val nowSec = System.currentTimeMillis() / 1000
         val day = now.dayOfYear
         val picks = pool.values
             .filter { it.key !in taste.watched && it.key !in taste.disliked }
             .map { c ->
-                val ageDays = ((nowSec - c.addedTs) / 86_400.0).coerceAtLeast(0.0)
                 val jitter = ((c.key.hashCode() * 31 + day) and 0xFF) / 255f * 0.3f
                 val score = taste.genreScore(c.genres) * 1.4f + taste.serviceScore(c.services) * 0.4f +
-                    (c.rating / 10.0).toFloat() * 0.7f + exp(-ageDays / 120.0).toFloat() * 0.5f +
+                    (c.rating / 10.0).toFloat() * 0.7f + fresh(c, now) * 0.5f +
                     (if (c.lang == 0) 0.3f else 0f) + jitter
                 c to score
             }
