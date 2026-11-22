@@ -122,7 +122,7 @@ fun LoginScreen() {
 }
 
 @Composable
-internal fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, type: KeyboardType = KeyboardType.Text, last: Boolean = false) {
+internal fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, type: KeyboardType = KeyboardType.Text, last: Boolean = false, onDone: (() -> Unit)? = null) {
     var focused by remember { mutableStateOf(false) }
     val fm = LocalFocusManager.current
     val shape = RoundedCornerShape(14.dp)
@@ -131,6 +131,7 @@ internal fun Field(value: String, onChange: (String) -> Unit, hint: String, modi
         textStyle = MaterialTheme.typography.titleLarge.copy(color = Ink.Text),
         cursorBrush = SolidColor(Ink.Accent),
         keyboardOptions = KeyboardOptions(keyboardType = type, imeAction = if (last) ImeAction.Done else ImeAction.Next, autoCorrectEnabled = false),
+        keyboardActions = if (onDone != null) androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }) else androidx.compose.foundation.text.KeyboardActions.Default,
         modifier = modifier.fillMaxWidth().height(54.dp)
             .onFocusChanged { focused = it.isFocused }
             // Up/down must move between fields instead of getting stuck inside the text.

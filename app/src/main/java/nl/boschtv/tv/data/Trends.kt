@@ -173,6 +173,25 @@ class Trends(private val db: AppDatabase, private val http: OkHttpClient, privat
         text != null
     }
 
+    /**
+     * The YouTube id of the title's trailer: the provider's own when it gave one, else TMDB's official
+     * trailer in the viewer's language, else in English. Null when neither has one.
+     */
+    suspend fun trailer(key: String): String? = withContext(Dispatchers.IO) {
+        db.catalog().title(key)?.trailer?.let(::youtubeId)?.let { return@withContext it }
+        if (!enabled) return@withContext null
+        val m = tmdbKey.find(key) ?: return@withContext null
+        val type = if (m.groupValues[1] == "m") "movie" else "tv"
+        val home = prefs.content().home.locale
+        for (lang in listOf(home, "en-US").distinct()) {
+            val videos = runCatching { results("$type/${m.groupValues[2]}/videos?language=$lang") }.getOrDefault(emptyList())
+                .filter { it.str("site") == "YouTube" && it.str("type") in setOf("Trailer", "Teaser") && !it.str("key").isNullOrBlank() }
+            val best = videos.sortedWith(compareBy({ it.str("type") != "Trailer" }, { !it.bool("official") })).firstOrNull()
+            if (best != null) return@withContext best.str("key")
+        }
+        null
+    }
+
     private fun item(path: String): JsonObj? {
         val req = Request.Builder().url("https://api.themoviedb.org/3/$path")
             .header("Authorization", "Bearer $token").header("accept", "application/json").build()
@@ -191,4 +210,11 @@ class Trends(private val db: AppDatabase, private val http: OkHttpClient, privat
             return root.list("results").mapNotNull { it.asObj() }
         }
     }
+}
+
+/** A YouTube video id from what providers put in their trailer field: the bare id or any YouTube link. */
+fun youtubeId(raw: String): String? {
+    val v = raw.trim()
+    if (Regex("""^[A-Za-z0-9_-]{11}$""").matches(v)) return v
+    return Regex("""(?:v=|youtu\.be/|embed/|shorts/)([A-Za-z0-9_-]{11})""").find(v)?.groupValues?.get(1)
 }

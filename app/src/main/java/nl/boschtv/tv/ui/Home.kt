@@ -62,6 +62,7 @@ data class BrowseArgs(val title: String, val query: TitleQuery, val filters: Boo
 
 class Nav(
     val openTitle: (String) -> Unit,
+    val resumeTitle: (String) -> Unit,
     val openBrowse: (BrowseArgs) -> Unit,
     val openService: (Service) -> Unit,
     val openLive: (Long?) -> Unit,
@@ -113,7 +114,6 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
 @Composable
 fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, kids: Boolean = false, active: Boolean = true) {
     val c = rememberContainer()
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val catalogVersion by c.sync.version.collectAsState()
     val libraryVersion by c.library.version.collectAsState()
@@ -168,7 +168,7 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
                                 row = row,
                                 onFocus = { focused = it ?: focused },
                                 // "Continue watching" carries on right away; every other tile opens its page.
-                                onClick = { if (row.id == "continue") nl.boschtv.tv.player.Playback.title(ctx, it.key) else nav.openTitle(it.key) },
+                                onClick = { if (row.id == "continue") nav.resumeTitle(it.key) else nav.openTitle(it.key) },
                                 firstFocus = if (i == 0) first else null,
                                 onService = nav.openService,
                                 onMore = row.more?.let { q -> { nav.openBrowse(BrowseArgs(row.title, q.copy(limit = 60))) } },
@@ -213,7 +213,7 @@ private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
     val c = rememberContainer()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var url by remember { mutableStateOf<String?>(null) }
-    var startMs by remember { mutableStateOf(INTRO_SKIP_MS) }
+    var startMs by remember { androidx.compose.runtime.mutableLongStateOf(INTRO_SKIP_MS) }
     LaunchedEffect(card?.key) {
         url = null
         val key = card?.key ?: return@LaunchedEffect

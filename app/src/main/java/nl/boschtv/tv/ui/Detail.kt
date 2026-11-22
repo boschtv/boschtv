@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material.icons.rounded.ThumbUp
@@ -72,7 +73,7 @@ import nl.boschtv.tv.data.toCard
 import nl.boschtv.tv.player.Playback
 
 @Composable
-fun DetailScreen(key: String, nav: Nav) {
+fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
     val c = rememberContainer()
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -86,8 +87,11 @@ fun DetailScreen(key: String, nav: Nav) {
     var inList by remember(key) { mutableStateOf(false) }
     var liked by remember(key) { mutableStateOf<Boolean?>(null) }
     var similar by remember(key) { mutableStateOf<List<Card>>(emptyList()) }
+    var trailer by remember(key) { mutableStateOf<String?>(null) }
     var season by remember(key) { mutableIntStateOf(-1) }
     val playFocus = remember { FocusRequester() }
+    /** The episode being watched, for landing on it when coming back from the player. */
+    val episodeFocus = remember { FocusRequester() }
     var inRows by remember(key) { mutableStateOf(false) }
     /** Set once focus has been in the rows: only then does entering the buttons mean "coming up from below". */
     var inRowsBefore by remember(key) { mutableStateOf(false) }
@@ -100,13 +104,14 @@ fun DetailScreen(key: String, nav: Nav) {
         title = c.catalog.title(key)                    // instant, from the local catalog
         inList = c.library.inList(key); liked = c.library.rating(key)
         episodes = c.catalog.episodes(key)
-        if (attempt == 0) { delay(80); runCatching { playFocus.requestFocus() } }
+        if (attempt == 0 && !atEpisode) { delay(80); runCatching { playFocus.requestFocus() } }
         title = c.catalog.detail(key) ?: title          // then plot, cast and a fresh episode list
         // The provider's description is often English only: TMDB may have it in the viewer's language.
         if (title?.lPlotLocale != c.prefs.content().home.locale && c.trends.localizePlot(key)) title = c.catalog.title(key) ?: title
         episodes = c.catalog.episodes(key)
         loading = false
         title?.let { similar = c.recommender.similar(it.toCard()) }
+        trailer = runCatching { c.trends.trailer(key) }.getOrNull()
     }
     LaunchedEffect(key, libraryVersion, episodes.size) {
         progress = c.library.progressOf(key).associateBy { it.contentId }
@@ -114,7 +119,12 @@ fun DetailScreen(key: String, nav: Nav) {
         if (season < 0 || episodes.none { it.season == season }) season = resume?.first?.season ?: episodes.firstOrNull()?.season ?: -1
     }
 
-    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { runCatching { playFocus.requestFocus() } }
+    // Back from the player: on the episode being watched when this page was opened from "Continue watching"
+    // (and it is a series), otherwise on the play button.
+    val landOnEpisode = atEpisode && episodes.isNotEmpty()
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        if (!landOnEpisode || !runCatching { episodeFocus.requestFocus() }.getOrDefault(false)) runCatching { playFocus.requestFocus() }
+    }
     val t = title
     Box(Modifier.fillMaxSize().background(Ink.Bg)) {
         if (t == null) return@Box
@@ -177,6 +187,11 @@ fun DetailScreen(key: String, nav: Nav) {
                             Pill(label, { if (r != null) Playback.title(ctx, t.key, episodeId = r.first.id) else if (!loading) attempt++ }, Modifier.focusRequester(playFocus),
                                 primary = true, icon = Icons.Rounded.PlayArrow, height = 46.dp)
                         }
+                        // Only when there is one: from the provider, or TMDB's official trailer.
+                        trailer?.let { id ->
+                            Pill(stringResource(R.string.trailer), { Playback.trailer(ctx, id) },
+                                icon = Icons.Rounded.Movie, selected = true, height = 46.dp)
+                        }
                         Pill(if (inList) stringResource(R.string.in_my_list) else stringResource(R.string.tab_my_list), { scope.launch { inList = c.library.toggleList(t.key) } },
                             icon = if (inList) Icons.Rounded.Check else Icons.Rounded.Add, selected = true, height = 46.dp)
                         Pill("", { scope.launch { liked = if (liked == true) null else true; c.library.rate(t.key, liked) } },
@@ -203,8 +218,16 @@ fun DetailScreen(key: String, nav: Nav) {
                 }
                 item("episodes") {
                     val shown = episodes.filter { it.season == season }
+                    val current = resume?.first?.id
+                    // Opened from "Continue watching": the row starts at the episode being watched.
+                    val rowState = androidx.compose.foundation.lazy.rememberLazyListState(
+                        if (atEpisode) shown.indexOfFirst { it.id == current }.coerceAtLeast(0) else 0)
+                    LaunchedEffect(current, season) {
+                        val i = shown.indexOfFirst { it.id == current }
+                        if (atEpisode && i >= 0) rowState.scrollToItem(i)
+                    }
                     WithPivot(EDGE) {
-                        LazyRow(contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 12.dp, bottom = 8.dp),
+                        LazyRow(state = rowState, contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 12.dp, bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(shown.size, key = { shown[it].id }) { index ->
                                 val e = shown[index]
@@ -213,7 +236,8 @@ fun DetailScreen(key: String, nav: Nav) {
                                 val card = Card(e.id, 1, "${e.number}. ${e.name}", null, null, e.image ?: backdrop, 0.0, 0, 0, 0, 0, 0, e.plot,
                                     progress = frac, label = listOfNotNull(duration(e.durationSecs).ifBlank { null }, if (p?.finished == true) stringResource(R.string.watched) else null).joinToString(" · ").ifBlank { null },
                                     wideImage = e.image ?: backdrop)
-                                WideCard(card, { Playback.title(ctx, t.key, episodeId = e.id) }, Modifier.railEdge(index, shown.size))
+                                WideCard(card, { Playback.title(ctx, t.key, episodeId = e.id) },
+                                    Modifier.railEdge(index, shown.size).then(if (e.id == current) Modifier.focusRequester(episodeFocus) else Modifier))
                             }
                         }
                     }
