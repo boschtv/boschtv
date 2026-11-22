@@ -290,4 +290,7 @@
     <string name="name_needed">Give the profile a name first.</string>
     <string name="switch_profile">Switch profile</string>
     <string name="profile_own">History, My List and recommendations are kept per profile.</string>
+    <string name="avatar_credit">Avatars made with DiceBear: Bottts and Avataaars by Pablo Stanley, Fun Emoji by Davis Uche (CC BY 4.0), Pixel Art by DiceBear (CC0).</string>
+    <string name="trailer">Trailer</string>
+    <string name="trailer_failed">This trailer can\'t be played here.</string>
 </resources>
