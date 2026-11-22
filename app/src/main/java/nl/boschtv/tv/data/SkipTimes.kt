@@ -18,9 +18,9 @@ data class Segments(val intro: LongRange?, val recap: LongRange?, val creditsAt:
  * Intro, recap and credits times from two community databases: TheIntroDB (by TMDB id) and IntroDB
  * (by IMDb id, looked up through TMDB). Community times are sometimes wrong, so they are combined with
  * care:
- *  - Intro and recap: two sources that agree are trusted; one source needs several submissions or the
- *    series' usual intro length; sources that clearly disagree give no button (better no button than
- *    one that skips story).
+ *  - Intro and recap: whatever a source has is used, also a single submission; only when the two
+ *    sources clearly disagree and neither has clearly more people behind it is there no button
+ *    (better no button than one that skips story).
  *  - Credits: the latest start any reliable source gives. Later is always safe (the countdown starts a
  *    little after the credits); earlier could cut off the end of an episode.
  *  - The series as a whole: an episode whose credits stray much earlier than its neighbours' is moved to
@@ -130,20 +130,14 @@ class SkipTimes(private val http: OkHttpClient, private val tmdbToken: String) {
         val known = duration > 0
 
         fun opening(kind: String, maxLength: Long, maxShare: Double, typicalLength: Long? = null): LongRange? {
-            fun fits(e: JsonObj) = typicalLength != null && length(e)?.let { abs(it - typicalLength) <= 3_000 } == true
             fun same(x: JsonObj, y: JsonObj) = abs((x.long("start_ms") ?: 0L) - (y.long("start_ms") ?: 0L)) <= 10_000 &&
                 abs((x.long("end_ms") ?: 0L) - (y.long("end_ms") ?: 0L)) <= 10_000
-            val a = theIntroDb?.let { o -> best(o, kind) ?: candidates(o, kind).firstOrNull(::fits) }
+            fun fits(e: JsonObj) = typicalLength != null && length(e)?.let { abs(it - typicalLength) <= 3_000 } == true
+            // A single submission counts too: in practice the times that were missing were lone ones that were
+            // right (The Rings of Power 3x6). Within TheIntroDB the best-supported entry goes first, then one
+            // with the series' usual length, then whatever there is.
+            val a = theIntroDb?.let { o -> best(o, kind) ?: candidates(o, kind).firstOrNull(::fits) ?: candidates(o, kind).maxByOrNull(::subs) }
             val b = single(introDb, kind)
-            // A lone IntroDB entry for something TheIntroDB says nothing about (usually the recap) is believed
-            // when the intro in that same answer matches the intro TheIntroDB is sure of: whoever timed the
-            // one right has timed the other right (The Rings of Power 3x6).
-            fun vouched(): Boolean {
-                if (kind == "intro") return false
-                val theirs = single(introDb, "intro") ?: return false
-                val ours = theIntroDb?.let { best(it, "intro") } ?: return false
-                return same(ours, theirs)
-            }
             val pick = when {
                 a != null && b != null -> {
                     when {
@@ -154,7 +148,7 @@ class SkipTimes(private val http: OkHttpClient, private val tmdbToken: String) {
                     }
                 }
                 a != null -> a
-                b != null -> b.takeIf { subs(it) >= 2 || fits(it) || vouched() }
+                b != null -> b
                 else -> null
             } ?: return null
             val start = pick.long("start_ms") ?: 0L

@@ -64,17 +64,19 @@ class SkipTimesTest {
         // Landman 1x9: one submission (confidence 0.6), 5:03-6:08; the series' intro is 1:05-1:06 every episode.
         val o = json("""{"intro":[{"start_ms":303000,"end_ms":368000,"confidence":0.6,"submission_count":1}]}""")
         assertEquals(303000L..368000L, skips.segments(o, null, duration = 2_917_000, typicalIntroLength = 66_000L).intro)
+        // A lone one of another length counts as well: a single submission is usually right.
         val odd = json("""{"intro":[{"start_ms":303000,"end_ms":420000,"confidence":0.6,"submission_count":1}]}""")
-        assertNull(skips.segments(odd, null, duration = 2_917_000, typicalIntroLength = 66_000L).intro)
+        assertEquals(303000L..420000L, skips.segments(odd, null, duration = 2_917_000, typicalIntroLength = 66_000L).intro)
     }
 
     @Test fun sourcesThatAgreeConfirmAnIntro() {
         // Landman 1x9 in both databases, one submission each, two seconds apart: confirmed.
         val a = json("""{"intro":[{"start_ms":303000,"end_ms":368000,"confidence":0.6,"submission_count":1}]}""")
         val b = json("""{"intro":{"start_ms":303000,"end_ms":370000,"confidence":1,"submission_count":1}}""")
-        assertNull("one unconfirmed submission alone is not enough", skips.segments(a, null, duration = 2_917_000).intro)
-        // TheIntroDB's lone entry is not "agreed", so it only counts through the other source agreeing.
-        assertEquals(303000L..370000L, skips.segments(json("{}"), b, duration = 2_917_000, typicalIntroLength = 66_000L).intro)
+        assertEquals(303000L..368000L, skips.segments(a, b, duration = 2_917_000).intro)
+        // Either of them alone is used too.
+        assertEquals(303000L..368000L, skips.segments(a, null, duration = 2_917_000).intro)
+        assertEquals(303000L..370000L, skips.segments(json("{}"), b, duration = 2_917_000).intro)
     }
 
     @Test fun sourcesThatDisagreeGiveNoButtonUnlessOneIsClearlyBacked() {
@@ -87,12 +89,17 @@ class SkipTimesTest {
         assertNull(skips.segments(a2, b, duration = 3_000_000).intro)
     }
 
-    @Test fun ignoresLoneUncertainSubmissions() {
+    @Test fun usesALoneSubmission() {
         val o = json("""{"intro":[{"start_ms":60000,"end_ms":120000,"confidence":0.3,"submission_count":1}]}""")
-        assertNull(skips.segments(o, null, duration = 2_700_000).intro)
+        assertEquals(60000L..120000L, skips.segments(o, null, duration = 2_700_000).intro)
+        // Still not anything at all: an "intro" of ten minutes, or one that ends past 40% of the episode, is no intro.
+        val long = json("""{"intro":[{"start_ms":60000,"end_ms":660000,"confidence":0.3,"submission_count":1}]}""")
+        assertNull(skips.segments(long, null, duration = 2_700_000).intro)
+        val late = json("""{"intro":[{"start_ms":1500000,"end_ms":1560000,"confidence":0.3,"submission_count":1}]}""")
+        assertNull(skips.segments(late, null, duration = 2_700_000).intro)
     }
 
-    @Test fun aLoneRecapIsBelievedWhenItsIntroChecksOut() {
+    @Test fun aLoneRecapIsUsed() {
         // The Rings of Power 3x6 (the real answers): TheIntroDB has the intro (9 submissions) and no recap;
         // IntroDB has one submission with the same intro and a recap of the first 85 seconds.
         val a = json("""{"group_duration_ms":3857000,
@@ -104,11 +111,7 @@ class SkipTimesTest {
         val s = skips.segments(a, b, duration = 3_857_000)
         assertEquals(0L..85000L, s.recap)
         assertEquals(585000L..674037L, s.intro)
-        // The same lone recap next to an intro that does not match stays out: nothing vouches for it.
-        val stray = json("""{"intro":{"start_ms":300000,"end_ms":360000,"confidence":1,"submission_count":1},
-            "recap":{"start_ms":0,"end_ms":85000,"confidence":1,"submission_count":1}}""")
-        assertNull(skips.segments(a, stray, duration = 3_857_000).recap)
-        // And without TheIntroDB to check against, one submission is still not enough.
-        assertNull(skips.segments(null, b, duration = 3_857_000).recap)
+        // Also with nothing to check it against.
+        assertEquals(0L..85000L, skips.segments(null, b, duration = 3_857_000).recap)
     }
 }
