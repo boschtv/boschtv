@@ -201,7 +201,8 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
                     }
                 }
             }
-            WithPivot(44.dp) { LazyColumn(Modifier.fillMaxSize().onFocusChanged { if (it.hasFocus) inRowsBefore = true; inRows = it.hasFocus }
+            // The pivot leaves room for the season buttons above the episode that has focus.
+            WithPivot(64.dp) { LazyColumn(Modifier.fillMaxSize().onFocusChanged { if (it.hasFocus) inRowsBefore = true; inRows = it.hasFocus }
                 // Up from the top row goes back to the play button (which also expands the header again).
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) {
