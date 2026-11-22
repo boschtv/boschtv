@@ -42,7 +42,12 @@ class Prefs(private val context: Context) {
         val PREVIEW_SOUND = booleanPreferencesKey("preview_sound")
         val UPDATE_SNOOZE = stringPreferencesKey("update_snooze")
         val SERVICE_LOGOS = stringPreferencesKey("service_logos")
+        val PROFILE = longPreferencesKey("profile")
     }
+
+    /** The profile that is watching; null before one was ever chosen. */
+    val profile: Flow<Long?> = context.store.data.map { it[K.PROFILE] }.distinctUntilChanged()
+    suspend fun saveProfile(id: Long) = context.store.edit { it[K.PROFILE] = id }
 
     val source: Flow<Source> = context.store.data
         .map { Source(it[K.HOST].orEmpty(), it[K.USER].orEmpty(), it[K.PASS].orEmpty()) }
