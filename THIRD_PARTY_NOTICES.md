@@ -33,6 +33,19 @@ The material icons in the app come from Google's Material Symbols (Apache Licens
 **Geist** by Vercel, in `app/src/main/res/font/geist.ttf`, under the
 [SIL Open Font License 1.1](licenses/Geist-OFL.txt).
 
+## Profile avatars
+
+The illustrated avatars in `app/src/main/assets/avatars/` were made with [DiceBear](https://www.dicebear.com)
+(code under the MIT license) by `tools/avatars/generate.mjs`. The designs:
+
+- **Bottts** by Pablo Stanley ([bottts.com](https://bottts.com/)): free for personal and commercial use.
+- **Avataaars** by Pablo Stanley ([avataaars.com](https://avataaars.com/)): free for personal and commercial use.
+- **Fun Emoji** by Davis Uche, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Generated from the
+  original design; not changed otherwise.
+- **Pixel Art** by DiceBear, under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+The full license texts are in `licenses/dicebear-*.txt`. The app also names the designers in Settings.
+
 ## Data and services
 
 - **TMDB.** Posters, trending lists, recommendations and streaming-service logos use the TMDB API.

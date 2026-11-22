@@ -25,6 +25,11 @@ object Playback {
     const val RESTART = "restart"
     const val CHANNEL = "channel"
 
+    /** Plays a YouTube trailer full screen inside the app (see [TrailerActivity]). */
+    fun trailer(ctx: Context, youtubeId: String) {
+        ctx.startActivity(Intent(ctx, TrailerActivity::class.java).putExtra(TrailerActivity.VIDEO, youtubeId))
+    }
+
     fun title(ctx: Context, key: String, episodeId: String? = null, streamId: Long? = null, container: String? = null, restart: Boolean = false) {
         ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
             putExtra(KEY, key); putExtra(EPISODE, episodeId); putExtra(RESTART, restart)

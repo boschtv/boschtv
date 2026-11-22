@@ -136,6 +136,7 @@ fun SettingsScreen(focus: FocusRequester) {
             // Required by TMDB's API terms.
             Text(stringResource(R.string.tmdb_credit),
                 style = MaterialTheme.typography.bodySmall, color = Ink.Muted)
+            Text(stringResource(R.string.avatar_credit), style = MaterialTheme.typography.bodySmall, color = Ink.Muted)
             if (c.updater.enabled) {
                 val up by c.updater.state.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

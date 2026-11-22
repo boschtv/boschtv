@@ -289,4 +289,7 @@
     <string name="name_needed">Geef het profiel eerst een naam.</string>
     <string name="switch_profile">Wissel van profiel</string>
     <string name="profile_own">Kijkgeschiedenis, Mijn lijst en aanbevelingen zijn per profiel.</string>
+    <string name="avatar_credit">Avatars gemaakt met DiceBear: Bottts en Avataaars door Pablo Stanley, Fun Emoji door Davis Uche (CC BY 4.0), Pixel Art door DiceBear (CC0).</string>
+    <string name="trailer">Trailer</string>
+    <string name="trailer_failed">Deze trailer kan hier niet worden afgespeeld.</string>
 </resources>

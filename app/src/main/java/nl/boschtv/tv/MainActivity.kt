@@ -95,7 +95,8 @@ private enum class Tab(@androidx.annotation.StringRes val label: Int) { SEARCH(R
 
 /** Screens stacked on top of the current tab. */
 private sealed interface Layer {
-    data class Detail(val key: String) : Layer
+    /** [atEpisode]: opened under the player from "Continue watching", so Back lands on the episode being watched. */
+    data class Detail(val key: String, val atEpisode: Boolean = false) : Layer
     data class Browse(val args: BrowseArgs) : Layer
 }
 
@@ -161,6 +162,8 @@ private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, prof
     val nav = remember {
         Nav(
             openTitle = { layers += Layer.Detail(it) },
+            // "Continue watching" plays right away, with the title's page underneath: Back from the player lands there.
+            resumeTitle = { layers += Layer.Detail(it, atEpisode = true); Playback.title(ctx, it) },
             openBrowse = { layers += Layer.Browse(it) },
             openService = { scope = it; tab = Tab.HOME; layers.clear() },
             openLive = { Playback.live(ctx, it) },
@@ -206,7 +209,7 @@ private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, prof
             Box(Modifier.fillMaxSize().background(Ink.Bg).gate(top)) {
                 val own = remember(layer) { FocusRequester() }
                 when (layer) {
-                    is Layer.Detail -> DetailScreen(layer.key, nav)
+                    is Layer.Detail -> DetailScreen(layer.key, nav, atEpisode = layer.atEpisode)
                     is Layer.Browse -> BrowseScreen(layer.args, nav, own)
                 }
             }
@@ -261,7 +264,7 @@ private fun ProfileButton(profile: nl.boschtv.tv.data.db.ProfileEntity, onClick:
         scale = 1.12f, color = Color.Transparent, focusedColor = Color.Transparent) {
         val label = "${profile.name}, ${stringResource(R.string.switch_profile)}"
         nl.boschtv.tv.ui.Avatar(profile.avatar, profile.color, 40.dp,
-            Modifier.semantics { contentDescription = label })
+            Modifier.semantics { contentDescription = label }, name = profile.name)
     }
 }
 
