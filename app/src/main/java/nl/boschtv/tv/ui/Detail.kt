@@ -189,7 +189,7 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
                         }
                         // Only when there is one: from the provider, or TMDB's official trailer.
                         trailer?.let { id ->
-                            Pill(stringResource(R.string.trailer), { Playback.trailer(ctx, id) },
+                            Pill(stringResource(R.string.trailer), { Playback.trailer(ctx, id, t.name, t.dBackdrop ?: t.pBackdrop ?: t.poster) },
                                 icon = Icons.Rounded.Movie, selected = true, height = 46.dp)
                         }
                         Pill(if (inList) stringResource(R.string.in_my_list) else stringResource(R.string.tab_my_list), { scope.launch { inList = c.library.toggleList(t.key) } },
