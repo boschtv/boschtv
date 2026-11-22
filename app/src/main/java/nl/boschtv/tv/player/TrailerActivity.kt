@@ -121,6 +121,7 @@ class TrailerActivity : ComponentActivity() {
         </body></html>
     """.trimIndent()
 
+    @SuppressLint("RestrictedApi")   // false positive: overriding the Activity method, as in PlayerActivity
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val w = web ?: return super.dispatchKeyEvent(event)
