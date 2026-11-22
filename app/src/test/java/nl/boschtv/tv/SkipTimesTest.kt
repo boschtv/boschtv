@@ -91,4 +91,24 @@ class SkipTimesTest {
         val o = json("""{"intro":[{"start_ms":60000,"end_ms":120000,"confidence":0.3,"submission_count":1}]}""")
         assertNull(skips.segments(o, null, duration = 2_700_000).intro)
     }
+
+    @Test fun aLoneRecapIsBelievedWhenItsIntroChecksOut() {
+        // The Rings of Power 3x6 (the real answers): TheIntroDB has the intro (9 submissions) and no recap;
+        // IntroDB has one submission with the same intro and a recap of the first 85 seconds.
+        val a = json("""{"group_duration_ms":3857000,
+            "intro":[{"start_ms":585000,"end_ms":674037,"confidence":0.99,"submission_count":9}],
+            "credits":[{"start_ms":3557081,"end_ms":null,"confidence":0.99,"submission_count":11}]}""")
+        val b = json("""{"intro":{"start_ms":585000,"end_ms":670000,"confidence":1,"submission_count":1},
+            "recap":{"start_ms":0,"end_ms":85000,"confidence":1,"submission_count":1},
+            "outro":{"start_ms":3557000,"end_ms":3857250,"confidence":1,"submission_count":1}}""")
+        val s = skips.segments(a, b, duration = 3_857_000)
+        assertEquals(0L..85000L, s.recap)
+        assertEquals(585000L..674037L, s.intro)
+        // The same lone recap next to an intro that does not match stays out: nothing vouches for it.
+        val stray = json("""{"intro":{"start_ms":300000,"end_ms":360000,"confidence":1,"submission_count":1},
+            "recap":{"start_ms":0,"end_ms":85000,"confidence":1,"submission_count":1}}""")
+        assertNull(skips.segments(a, stray, duration = 3_857_000).recap)
+        // And without TheIntroDB to check against, one submission is still not enough.
+        assertNull(skips.segments(null, b, duration = 3_857_000).recap)
+    }
 }

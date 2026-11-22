@@ -140,6 +140,7 @@ class LiveActivity : ComponentActivity() {
     private var onScreen = false
     private var ext = "m3u8"
     private lateinit var frameRate: FrameRateMatch
+    private var session: androidx.media3.session.MediaSession? = null
     // Pausing and rewinding live TV. On the live stream itself a pause plays on from what the player
     // holds in memory, and [lag] counts how far behind that is. A channel with an archive goes on from
     // the provider's catch-up stream instead, which begins at [shiftStart] (clock time).
@@ -155,6 +156,14 @@ class LiveActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player = Playback.player(this, live = true)
         frameRate = FrameRateMatch(this, player)
+        // Lets the TV and a voice assistant ("pause the TV") steer live TV. Pause and play go through our own
+        // pause and resume, which keep track of how far behind live the picture is.
+        val steered = object : androidx.media3.common.ForwardingPlayer(player) {
+            override fun pause() { this@LiveActivity.pause() }
+            override fun play() { if (ui.paused) resume() else super.play() }
+            override fun setPlayWhenReady(playWhenReady: Boolean) { if (playWhenReady) play() else pause() }
+        }
+        session = androidx.media3.session.MediaSession.Builder(this, steered).setId("live").build()
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 ui.buffering = state == Player.STATE_BUFFERING
@@ -355,7 +364,7 @@ class LiveActivity : ComponentActivity() {
     private suspend fun open(ch: ChannelEntity) {
         if (released || !onScreen) return
         toLive()
-        player.setMediaItem(Playback.item(c.prefs.source().live(ch.id, ext)))
+        player.setMediaItem(Playback.item(c.prefs.source().live(ch.id, ext), ch.name))
         player.prepare()
         player.playWhenReady = true
     }
@@ -488,6 +497,7 @@ class LiveActivity : ComponentActivity() {
         if (released) return
         released = true
         tuneJob?.cancel()
+        session?.release(); session = null
         player.release()
     }
 

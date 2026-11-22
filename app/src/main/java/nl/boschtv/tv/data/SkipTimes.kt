@@ -131,21 +131,30 @@ class SkipTimes(private val http: OkHttpClient, private val tmdbToken: String) {
 
         fun opening(kind: String, maxLength: Long, maxShare: Double, typicalLength: Long? = null): LongRange? {
             fun fits(e: JsonObj) = typicalLength != null && length(e)?.let { abs(it - typicalLength) <= 3_000 } == true
+            fun same(x: JsonObj, y: JsonObj) = abs((x.long("start_ms") ?: 0L) - (y.long("start_ms") ?: 0L)) <= 10_000 &&
+                abs((x.long("end_ms") ?: 0L) - (y.long("end_ms") ?: 0L)) <= 10_000
             val a = theIntroDb?.let { o -> best(o, kind) ?: candidates(o, kind).firstOrNull(::fits) }
             val b = single(introDb, kind)
+            // A lone IntroDB entry for something TheIntroDB says nothing about (usually the recap) is believed
+            // when the intro in that same answer matches the intro TheIntroDB is sure of: whoever timed the
+            // one right has timed the other right (The Rings of Power 3x6).
+            fun vouched(): Boolean {
+                if (kind == "intro") return false
+                val theirs = single(introDb, "intro") ?: return false
+                val ours = theIntroDb?.let { best(it, "intro") } ?: return false
+                return same(ours, theirs)
+            }
             val pick = when {
                 a != null && b != null -> {
-                    val same = abs((a.long("start_ms") ?: 0L) - (b.long("start_ms") ?: 0L)) <= 10_000 &&
-                        abs((a.long("end_ms") ?: 0L) - (b.long("end_ms") ?: 0L)) <= 10_000
                     when {
-                        same -> a
+                        same(a, b) -> a
                         subs(a) >= 2 && subs(a) >= 2 * subs(b) -> a   // clearly more people behind one of them
                         subs(b) >= 2 && subs(b) >= 2 * subs(a) -> b
                         else -> null                                  // they disagree: no button
                     }
                 }
                 a != null -> a
-                b != null -> b.takeIf { subs(it) >= 2 || fits(it) }
+                b != null -> b.takeIf { subs(it) >= 2 || fits(it) || vouched() }
                 else -> null
             } ?: return null
             val start = pick.long("start_ms") ?: 0L
