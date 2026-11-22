@@ -190,7 +190,11 @@ class SyncManager(
             if (o.bool("is_adult")) return@forEach
             val id = (if (kind == KIND_MOVIE) o.long("stream_id") else o.long("series_id")) ?: return@forEach
             val clean = Titles.clean(o.str("name") ?: return@forEach)
-            val year = clean.year ?: (o.str("releaseDate") ?: o.str("release_date") ?: o.str("year"))?.take(4)?.toIntOrNull()
+            val released = (o.str("releaseDate") ?: o.str("release_date") ?: o.str("year"))?.take(4)?.toIntOrNull()
+            val year = clean.year ?: released
+            // A long-running series is listed per season ("Goede Tijden, Slechte Tijden (2026)"): the year it
+            // started is the earlier one, and that is what decides whether it counts as new.
+            val shownYear = if (kind == KIND_SERIES && year != null && released != null && released in 1900..year) released else year
             val tmdb = Titles.tmdbId(o.str("tmdb")) ?: Titles.tmdbId(o.str("tmdb_id"))
             val seriesDub = kind == KIND_SERIES && clean.dubbed
             val key = buildString {
@@ -207,7 +211,7 @@ class SyncManager(
             val cand = Candidate(
                 key = key, kind = kind, sourceId = id,
                 name = if (seriesDub) "${clean.name} (NL gesproken)" else clean.name,
-                year = year,
+                year = shownYear,
                 poster = o.str("stream_icon") ?: o.str("cover"),
                 container = o.str("container_extension"),
                 addedTs = o.long("added") ?: o.long("last_modified") ?: 0L,
