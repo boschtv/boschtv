@@ -322,4 +322,7 @@
     <string name="forward_30">30 s vor</string>
     <string name="to_live">Zurück zu Live</string>
     <string name="channels">Sender</string>
+    <string name="track_sdh">für Hörgeschädigte</string>
+    <string name="track_forced">nur fremdsprachige Dialoge</string>
+    <string name="more_languages">Weitere Sprachen (%1$d)</string>
 </resources>

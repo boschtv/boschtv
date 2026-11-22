@@ -322,4 +322,7 @@
     <string name="forward_30">30 s vooruit</string>
     <string name="to_live">Terug naar live</string>
     <string name="channels">Zenders</string>
+    <string name="track_sdh">voor doven en slechthorenden</string>
+    <string name="track_forced">alleen anderstalige dialogen</string>
+    <string name="more_languages">Meer talen (%1$d)</string>
 </resources>

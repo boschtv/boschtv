@@ -135,4 +135,26 @@ class PlaybackTest {
         now += 1; assertTrue(timer.due())
         assertFalse(timer.due()); assertEquals(0, timer.minutesLeft())
     }
+
+    /* ---------- subtitle and audio lists ---------- */
+
+    @Test fun viewersLanguagesHeadTheTrackList() {
+        val t = listOf(
+            nl.boschtv.tv.core.TrackInfo("ar", null), nl.boschtv.tv.core.TrackInfo("en", "English [SDH]", hearingImpaired = true),
+            nl.boschtv.tv.core.TrackInfo("en", "English"), nl.boschtv.tv.core.TrackInfo("de", null),
+            nl.boschtv.tv.core.TrackInfo("nl-NL", "Dutch (Forced)", forced = true), nl.boschtv.tv.core.TrackInfo("nl", "Dutch"),
+            nl.boschtv.tv.core.TrackInfo("fr", null), nl.boschtv.tv.core.TrackInfo(null, "Commentary"),
+        )
+        val mine = listOf("nl", "en")
+        // Dutch, then English; the plain track before the special ones; the rest as the file has them.
+        assertEquals(listOf(5, 4, 2, 1, 0, 3, 6, 7), nl.boschtv.tv.core.TrackList.order(t, mine))
+        assertEquals(setOf(0, 3, 6, 7), nl.boschtv.tv.core.TrackList.folded(t, mine))
+        // A short list is shown whole, and so is one with nothing in your languages.
+        assertTrue(nl.boschtv.tv.core.TrackList.folded(t.take(6), mine).isEmpty())
+        assertTrue(nl.boschtv.tv.core.TrackList.folded(t, listOf("ja")).isEmpty())
+        assertTrue(nl.boschtv.tv.core.TrackList.hearingImpaired("English [SDH]"))
+        assertTrue(nl.boschtv.tv.core.TrackList.forced("Dutch (Forced)"))
+        assertFalse(nl.boschtv.tv.core.TrackList.forced("Dutch"))
+        assertEquals(listOf("English", "English 2", "Dutch", "English 3"), nl.boschtv.tv.core.TrackList.distinct(listOf("English", "English", "Dutch", "English")))
+    }
 }
