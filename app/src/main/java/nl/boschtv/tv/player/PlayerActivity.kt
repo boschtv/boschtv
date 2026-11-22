@@ -177,6 +177,7 @@ class PlayerActivity : ComponentActivity() {
     private var awaitingFrame = false
     private var lastScrubAt = 0L
     private lateinit var frameRate: FrameRateMatch
+    private var session: androidx.media3.session.MediaSession? = null
     private var sleepCheck = true
     /** Episodes that started by themselves since the remote was last touched. */
     private var unattended = 0
@@ -187,6 +188,8 @@ class PlayerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player = Playback.player(this, live = false)
         frameRate = FrameRateMatch(this, player)
+        // Lets the TV and a voice assistant ("pause the TV") see and steer what is playing.
+        session = androidx.media3.session.MediaSession.Builder(this, player).setId("film").build()
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { ui.playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) {
@@ -274,7 +277,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun start(url: String, positionMs: Long) {
         retries = 0; ui.error = null
-        player.setMediaItem(Playback.item(url), positionMs.coerceAtLeast(0))
+        player.setMediaItem(Playback.item(url, ui.title, ui.subtitle), positionMs.coerceAtLeast(0))
         player.prepare()
         player.playWhenReady = true
         show()
@@ -458,6 +461,7 @@ class PlayerActivity : ComponentActivity() {
         save()
         released = true
         scrubJob?.cancel()
+        session?.release(); session = null
         player.release()
     }
 

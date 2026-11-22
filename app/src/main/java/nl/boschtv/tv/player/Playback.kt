@@ -90,8 +90,10 @@ object Playback {
             }
     }
 
-    fun item(url: String): MediaItem {
+    /** [title] and [subtitle] are what the TV and a voice assistant show for what is playing. */
+    fun item(url: String, title: String? = null, subtitle: String? = null): MediaItem {
         val b = MediaItem.Builder().setUri(url)
+        if (!title.isNullOrBlank()) b.setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(title).setSubtitle(subtitle).build())
         if (url.substringBefore('?').endsWith(".m3u8")) b.setMimeType(MimeTypes.APPLICATION_M3U8)
         return b.build()
     }
