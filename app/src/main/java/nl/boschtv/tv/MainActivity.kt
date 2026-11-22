@@ -200,24 +200,28 @@ private fun Modifier.gate(open: Boolean): Modifier =
 
 @Composable
 private fun TopBar(selected: Tab, scope: Service?, enabled: Boolean, updateWaiting: Boolean, onScope: () -> Unit, onSelect: (Tab) -> Unit) {
+    val current = remember { FocusRequester() }
+    fun at(t: Tab) = if (selected == t) Modifier.focusRequester(current) else Modifier
     // A soft shade behind the bar keeps it readable over bright artwork.
     Box(Modifier.fillMaxWidth().height(104.dp).background(Brush.verticalGradient(listOf(Ink.Bg.copy(alpha = 0.92f), Ink.Bg.copy(alpha = 0.55f), Color.Transparent))))
     Row(
-        Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 20.dp).gate(enabled),
+        Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 20.dp)
+            // Coming up from the page: land on the page's own menu item, not on whatever sits above the tile.
+            .focusProperties { enter = { if (enabled) current else FocusRequester.Cancel } }.focusGroup(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ScopeButton(scope, onScope)
         Spacer(Modifier.width(8.dp))
-        NavItem("", selected == Tab.SEARCH, Icons.Rounded.Search, stringResource(R.string.search)) { onSelect(Tab.SEARCH) }
+        NavItem("", selected == Tab.SEARCH, Icons.Rounded.Search, stringResource(R.string.search), at(Tab.SEARCH)) { onSelect(Tab.SEARCH) }
         for (t in listOf(Tab.HOME, Tab.MOVIES, Tab.SERIES, Tab.GENRES, Tab.KIDS, Tab.MYLIST)) {
-            NavItem(stringResource(t.label), selected == t) { onSelect(t) }
+            NavItem(stringResource(t.label), selected == t, modifier = at(t)) { onSelect(t) }
         }
         Spacer(Modifier.weight(1f))
         // Live TV is a different mode, so it sits apart on the right, but it is an ordinary item.
         NavItem(stringResource(Tab.LIVE.label), false, Icons.Rounded.LiveTv) { onSelect(Tab.LIVE) }
         // A new version waiting: a small dot on the settings icon, nothing that interrupts.
         Box {
-            NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings)) { onSelect(Tab.SETTINGS) }
+            NavItem("", selected == Tab.SETTINGS, Icons.Rounded.Settings, stringResource(R.string.settings), at(Tab.SETTINGS)) { onSelect(Tab.SETTINGS) }
             if (updateWaiting) Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp).size(9.dp).background(Ink.Accent, CircleShape))
         }
     }
