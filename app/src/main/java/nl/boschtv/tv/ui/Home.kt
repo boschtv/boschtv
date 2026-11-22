@@ -113,6 +113,7 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
 @Composable
 fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, kids: Boolean = false, active: Boolean = true) {
     val c = rememberContainer()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val catalogVersion by c.sync.version.collectAsState()
     val libraryVersion by c.library.version.collectAsState()
@@ -166,7 +167,8 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
                             CardRow(
                                 row = row,
                                 onFocus = { focused = it ?: focused },
-                                onClick = { nav.openTitle(it.key) },
+                                // "Continue watching" carries on right away; every other tile opens its page.
+                                onClick = { if (row.id == "continue") nl.boschtv.tv.player.Playback.title(ctx, it.key) else nav.openTitle(it.key) },
                                 firstFocus = if (i == 0) first else null,
                                 onService = nav.openService,
                                 onMore = row.more?.let { q -> { nav.openBrowse(BrowseArgs(row.title, q.copy(limit = 60))) } },
@@ -203,16 +205,25 @@ fun Splash(modifier: Modifier = Modifier) {
  * Rest on a title for a moment and it starts playing, muted, where its artwork was. The rows stay
  * exactly where they are. Stops as soon as you move on, open something, or leave the screen.
  */
+/** Where a preview of something not yet started begins: past the logos and opening titles. */
+private const val INTRO_SKIP_MS = 240_000L
+
 @Composable
 private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
     val c = rememberContainer()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var url by remember { mutableStateOf<String?>(null) }
+    var startMs by remember { mutableStateOf(INTRO_SKIP_MS) }
     LaunchedEffect(card?.key) {
         url = null
         val key = card?.key ?: return@LaunchedEffect
         delay(2500)
-        url = runCatching { c.catalog.previewUrl(key) }.getOrNull()
+        // Something this profile is in the middle of: show where they are, not the first episode.
+        // Only the real player saves progress, so watching a preview never moves that spot.
+        val resume = runCatching { c.library.progressOf(key).filter { !it.finished }.maxByOrNull { it.updatedAt } }.getOrNull()
+        val resumeUrl = resume?.let { runCatching { c.catalog.resumeUrl(it) }.getOrNull() }
+        startMs = if (resumeUrl != null && resume.positionMs > 0) (resume.positionMs - 3_000).coerceAtLeast(0) else INTRO_SKIP_MS
+        url = resumeUrl ?: runCatching { c.catalog.previewUrl(key) }.getOrNull()
         delay(30_000)   // a taste, not the whole film: then back to the artwork
         url = null
     }
@@ -227,7 +238,7 @@ private fun Preview(card: Card?, sound: Boolean, modifier: Modifier) {
         nl.boschtv.tv.player.Playback.player(ctx, live = false).apply {
             volume = if (sound) 0.5f else 0f   // half volume, or silent when switched off in Settings
             trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true).build()
-            setMediaItem(nl.boschtv.tv.player.Playback.item(stream), 240_000L)   // skip logos and opening titles
+            setMediaItem(nl.boschtv.tv.player.Playback.item(stream), startMs)
             prepare(); playWhenReady = true
         }.also { holder[0] = it }
     }

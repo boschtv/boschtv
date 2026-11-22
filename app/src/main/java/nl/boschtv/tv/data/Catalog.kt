@@ -219,6 +219,14 @@ class Catalog(
         eps.firstOrNull()?.let { src.episode(it.id, it.container) }
     }
 
+    /** Stream of what a profile was watching: the film version it chose, or the episode it is on. */
+    suspend fun resumeUrl(p: nl.boschtv.tv.data.db.ProgressEntity): String? = withContext(Dispatchers.IO) {
+        val src = prefs.source()
+        if (p.episodeId != null) return@withContext src.episode(p.episodeId, p.container)
+        val t = dao.title(p.titleKey) ?: return@withContext null
+        src.movie(p.streamId ?: t.sourceId, p.container ?: t.container)
+    }
+
     suspend fun episodes(key: String): List<EpisodeEntity> = withContext(Dispatchers.IO) { dao.episodes(key) }
     suspend fun episode(id: String): EpisodeEntity? = withContext(Dispatchers.IO) { dao.episode(id) }
 }
