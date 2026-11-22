@@ -40,6 +40,8 @@ The material icons in the app come from Google's Material Symbols (Apache Licens
   [TMDB API terms](https://www.themoviedb.org/api-terms-of-use).
 - **JustWatch.** Which titles are on which streaming service, and the services' logos, are
   watch-provider data that TMDB gets from JustWatch.
+- **TheIntroDB.** "Skip intro", "Skip recap" and the next-episode countdown use community timestamps
+  from [TheIntroDB](https://theintrodb.org), looked up by TMDB id.
 - **Your IPTV provider.** BoschTV contains no content; everything it shows comes from the
   subscription you log in with.
 

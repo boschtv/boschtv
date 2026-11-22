@@ -99,8 +99,31 @@ class VodUi {
     var tracksOpen by mutableStateOf(false)
     var audio by mutableStateOf<List<TrackOption>>(emptyList())
     var text by mutableStateOf<List<TrackOption>>(emptyList())
-    val nearEnd get() = next != null && duration > 0 && duration - position < 30_000
+    /** After skipping, left/right keep skipping until Up or Down goes to the buttons (as in the big streaming apps). */
+    var seeking by mutableStateOf(false)
+    /** Intro, recap and credits of the current episode, from TheIntroDB; null when unknown. */
+    var segments by mutableStateOf<nl.boschtv.tv.data.Segments?>(null)
+    /** Any key during the credits countdown keeps you in the credits. */
+    var stayInCredits by mutableStateOf(false)
+
+    /** The "Skip intro" / "Skip recap" button while one is playing: its text and where it jumps to. */
+    val skip: Pair<Int, Long>?
+        get() {
+            val s = segments ?: return null
+            s.recap?.let { if (position in it.first until it.last - 1500) return R.string.skip_recap to it.last }
+            s.intro?.let { if (position in it.first until it.last - 1500) return R.string.skip_intro to it.last }
+            return null
+        }
+    val creditsAt get() = segments?.creditsAt
+    val inCredits get() = next != null && creditsAt?.let { position >= it } == true
+    val nearEnd get() = next != null && duration > 0 && (inCredits || duration - position < AUTO_NEXT_MS)
+    /** Seconds until the next episode starts by itself. */
+    val nextIn: Int get() = if (inCredits && !stayInCredits) ((AUTO_NEXT_MS - (position - creditsAt!!)) / 1000).toInt().coerceAtLeast(0)
+        else ((duration - position) / 1000).toInt().coerceAtLeast(0)
 }
+
+/** How long the credits countdown runs before the next episode starts. */
+const val AUTO_NEXT_MS = 10_000L
 
 class PlayerActivity : ComponentActivity() {
     private val c by lazy { (application as App).container }
@@ -108,6 +131,7 @@ class PlayerActivity : ComponentActivity() {
     private val ui = VodUi()
     private var title: TitleEntity? = null
     private var episode: EpisodeEntity? = null
+    private var segmentsFor: String? = null
     private var streamId: Long = 0
     private var container: String? = null
     private var retries = 0
@@ -155,7 +179,16 @@ class PlayerActivity : ComponentActivity() {
                 if (released || !onScreen) continue
                 ui.position = player.currentPosition.coerceAtLeast(0)
                 ui.duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
-                if (ui.visible && !ui.tracksOpen && ui.playing && !ui.scrubbing && System.currentTimeMillis() - ui.touched > 4500) ui.visible = false
+                // Skip times need the file's length to pick the right release: ask once it is known.
+                val ep = episode
+                if (ep != null && ui.duration > 0 && segmentsFor != ep.id) {
+                    segmentsFor = ep.id
+                    launch { ui.segments = c.skips.forEpisode(ep.titleKey, ep.season, ep.number, ui.duration) }
+                }
+                // Credits reached and nobody pressed a key: on to the next episode.
+                val at = ui.creditsAt
+                if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) playNext()
+                if (ui.visible && !ui.tracksOpen && ui.playing && !ui.scrubbing && System.currentTimeMillis() - ui.touched > 4500) { ui.visible = false; ui.seeking = false }
                 if (++tick % 20 == 0 && ui.playing) save()
             }
         }
@@ -188,6 +221,7 @@ class PlayerActivity : ComponentActivity() {
         ui.title = title?.name.orEmpty()
         ui.subtitle = Texts.get(R.string.episode_line, ep.season, ep.number, ep.name)
         ui.next = c.library.nextEpisode(ep.titleKey, ep.id)
+        ui.segments = null; ui.stayInCredits = false; segmentsFor = null
         start(c.prefs.source().episode(ep.id, ep.container), positionMs)
     }
 
@@ -240,6 +274,7 @@ class PlayerActivity : ComponentActivity() {
         ui.scrubTo = null
         player.play()
         show()
+        ui.seeking = true
         watchForPicture()
     }
 
@@ -304,6 +339,12 @@ class PlayerActivity : ComponentActivity() {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val wasVisible = ui.visible
         ui.touched = System.currentTimeMillis()
+        if (ui.inCredits) ui.stayInCredits = true
+        // While an intro or recap plays and the controls are hidden, OK skips it.
+        val skip = ui.skip
+        if (skip != null && !wasVisible && !ui.scrubbing && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
+            player.seekTo(skip.second); ui.position = skip.second; return true
+        }
         when (event.keyCode) {
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> { toggle(); return true }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { scrub(true, event.repeatCount); return true }
@@ -316,14 +357,18 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         if (ui.tracksOpen) return super.dispatchKeyEvent(event)
-        if (!wasVisible || ui.scrubbing) when (event.keyCode) {
+        if (!wasVisible || ui.scrubbing || ui.seeking) when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> { scrub(false, event.repeatCount); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> { scrub(true, event.repeatCount); return true }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> when {
                 ui.scrubbing -> { commitScrub(); return true }
-                !wasVisible -> { toggle(); return true }
+                !wasVisible || ui.seeking -> { toggle(); return true }
             }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> { if (ui.scrubbing) commitScrub(); if (!wasVisible) { show(); return true } }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (ui.scrubbing) commitScrub()
+                ui.seeking = false   // to the buttons
+                if (!wasVisible) { show(); return true }
+            }
         }
         ui.visible = true
         return super.dispatchKeyEvent(event)
@@ -395,7 +440,7 @@ private fun VodScreen(
                             icon = if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow)
                         Pill(stringResource(R.string.from_start), onRestart, icon = Icons.Rounded.Replay, selected = true)
                         if (ui.text.isNotEmpty() || ui.audio.size > 1) Pill(stringResource(R.string.subs_audio), { ui.tracksOpen = true }, icon = Icons.Rounded.Subtitles, selected = true)
-                        if (ui.next != null) Pill(if (ui.nearEnd) stringResource(R.string.next_ep_in, ((ui.duration - ui.position) / 1000).coerceAtLeast(0).toInt()) else stringResource(R.string.next_episode), onNext, Modifier.focusRequester(nextFocus), icon = Icons.Rounded.SkipNext, selected = true)
+                        if (ui.next != null) Pill(if (ui.nearEnd && !(ui.inCredits && ui.stayInCredits)) stringResource(R.string.next_ep_in, ui.nextIn) else stringResource(R.string.next_episode), onNext, Modifier.focusRequester(nextFocus), icon = Icons.Rounded.SkipNext, selected = true)
                     }
                 }
             }
@@ -405,6 +450,13 @@ private fun VodScreen(
         }
         // Nudge towards the next episode during the credits.
         LaunchedEffect(ui.nearEnd) { if (ui.nearEnd) { ui.visible = true; ui.touched = System.currentTimeMillis(); delay(150); runCatching { nextFocus.requestFocus() } } }
+
+        // "Skip intro" / "Skip recap": also while the controls are hidden; OK presses it.
+        val skip = ui.skip
+        AnimatedVisibility(skip != null && !ui.scrubbing && !ui.tracksOpen, enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = if (ui.visible) 150.dp else 48.dp)) {
+            if (skip != null) Pill(stringResource(skip.first), { player.seekTo(skip.second); ui.position = skip.second }, primary = true, icon = Icons.Rounded.SkipNext, height = 48.dp)
+        }
 
         if (ui.tracksOpen) TrackPanel(ui, Modifier.align(Alignment.CenterEnd))
     }
