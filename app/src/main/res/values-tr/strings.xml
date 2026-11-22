@@ -317,4 +317,5 @@
     <string name="key_speak">Konuş</string>
     <string name="episodes">Bölümler</string>
     <string name="episodes_failed">Bölümler yüklenemedi. Yeniden denemek için Oynat\'a bas.</string>
+    <string name="back_again">BoschTV\'yi kapatmak için Geri\'ye tekrar bas</string>
 </resources>

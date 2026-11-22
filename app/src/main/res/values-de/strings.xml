@@ -317,4 +317,5 @@
     <string name="key_speak">Sprechen</string>
     <string name="episodes">Folgen</string>
     <string name="episodes_failed">Die Folgen konnten nicht geladen werden. Drücke Abspielen, um es erneut zu versuchen.</string>
+    <string name="back_again">Zum Schließen von BoschTV erneut Zurück drücken</string>
 </resources>

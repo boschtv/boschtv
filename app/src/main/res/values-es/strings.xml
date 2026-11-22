@@ -317,4 +317,5 @@
     <string name="key_speak">Hablar</string>
     <string name="episodes">Episodios</string>
     <string name="episodes_failed">No se pudieron cargar los episodios. Pulsa Reproducir para reintentar.</string>
+    <string name="back_again">Pulsa Atrás otra vez para cerrar BoschTV</string>
 </resources>

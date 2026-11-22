@@ -317,4 +317,5 @@
     <string name="key_speak">Inspreken</string>
     <string name="episodes">Afleveringen</string>
     <string name="episodes_failed">De afleveringen konden niet worden geladen. Druk op Afspelen om het opnieuw te proberen.</string>
+    <string name="back_again">Druk nogmaals op Terug om BoschTV te sluiten</string>
 </resources>

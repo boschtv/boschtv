@@ -317,4 +317,5 @@
     <string name="key_speak">Dicter</string>
     <string name="episodes">Épisodes</string>
     <string name="episodes_failed">Impossible de charger les épisodes. Appuyez sur Lire pour réessayer.</string>
+    <string name="back_again">Appuyez de nouveau sur Retour pour quitter BoschTV</string>
 </resources>

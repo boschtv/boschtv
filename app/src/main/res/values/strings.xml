@@ -318,4 +318,5 @@
     <string name="key_speak">Speak</string>
     <string name="episodes">Episodes</string>
     <string name="episodes_failed">The episodes couldn\'t be loaded. Press Play to try again.</string>
+    <string name="back_again">Press Back again to close BoschTV</string>
 </resources>
