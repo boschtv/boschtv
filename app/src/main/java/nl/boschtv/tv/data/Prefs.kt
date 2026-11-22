@@ -126,6 +126,9 @@ class Prefs(private val context: Context) {
      * the people on this TV stays: language and preview choices, and who is watching.
      */
     suspend fun logout() = context.store.edit {
+        // An install from before the language setting existed is Dutch without saying so. Write that down,
+        // or the next login would take it for a new install and switch to the TV's own language.
+        if (it[K.HOME_LANGUAGE] == null && !it[K.HOST].isNullOrEmpty()) it[K.HOME_LANGUAGE] = nl.boschtv.tv.core.Language.DUTCH.name
         listOf(
             K.HOST, K.USER, K.PASS, K.EXPIRES, K.MAX_CONN, K.TRIAL, K.PROBLEM, K.SERVER_ZONE, K.LIVE_EXT,
             K.LAST_SYNC, K.LAST_TRENDS, K.SYNC_REPORT, K.LAST_CHANNEL, K.LAST_GROUP,
