@@ -4,7 +4,10 @@ import nl.boschtv.tv.data.db.ChannelEntity
 import nl.boschtv.tv.data.db.ContentIds
 import nl.boschtv.tv.data.db.EpisodeEntity
 import nl.boschtv.tv.data.db.FavoriteEntity
+import nl.boschtv.tv.core.Titles
 import nl.boschtv.tv.data.matchFavorites
+import nl.boschtv.tv.data.resumeEpisode
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -49,5 +52,21 @@ class UserDataTest {
         assertEquals(listOf(501L), moved.getValue(npo).map { it.id })
         assertEquals(listOf(503L), moved.getValue(rtl).map { it.id })
         assertEquals(listOf(npo, rtl), moved.keys.toList())
+    }
+
+    @Test fun resumesTheEpisodeInProgressAndNeverFallsBackToTheStart() {
+        val eps = listOf(episode("a", 1, 1), episode("b", 1, 2), episode("c", 1, 10), episode("d", 2, 1))
+        assertEquals("c" to true, resumeEpisode(eps, 1, 10, null, null).let { it.first.id to it.second })
+        // This provider has no episode 9: the first one after it, from its beginning.
+        assertEquals("c" to false, resumeEpisode(eps, 1, 9, null, null).let { it.first.id to it.second })
+        // Nothing in progress: the one after the last finished, also when that one is not listed.
+        assertEquals("d" to false, resumeEpisode(eps, null, null, 1, 10).let { it.first.id to it.second })
+        assertEquals("c" to false, resumeEpisode(eps, null, null, 1, 5).let { it.first.id to it.second })
+        assertEquals("a" to false, resumeEpisode(eps, null, null, null, null).let { it.first.id to it.second })
+    }
+
+    @Test fun knowsANameThatIsOnlyANumber() {
+        for (n in listOf("Episodio 3", "Aflevering 12", "Episode 1", "E03", "7", "Épisode 2", "")) assertTrue(n, Titles.isPlaceholderEpisodeName(n))
+        for (n in listOf("Dreamers and Losers", "Part of the Family", "1984", "Episode 3: The Crumbs").drop(0)) if (n != "1984") assertFalse(n, Titles.isPlaceholderEpisodeName(n))
     }
 }

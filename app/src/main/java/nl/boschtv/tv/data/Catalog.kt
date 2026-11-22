@@ -108,6 +108,9 @@ class Catalog(
     private val client: XtreamClient,
     private val prefs: Prefs,
 ) {
+    /** Fills in what the provider left out of an episode list (name, picture, description); set by the app when it can. */
+    var completeEpisodes: (suspend (List<EpisodeEntity>) -> List<EpisodeEntity>)? = null
+
     private val dao get() = db.catalog()
 
     suspend fun isEmpty(): Boolean = withContext(Dispatchers.IO) { dao.titleCount() == 0 && db.channels().count() == 0 }
@@ -202,8 +205,9 @@ class Catalog(
             is Map<*, *> -> eps.forEach { (k, v) -> add((k as? String)?.toIntOrNull() ?: 1, v) }
             is List<*> -> eps.forEachIndexed { i, v -> add(i + 1, v) }
         }
+        val complete = completeEpisodes?.let { fill -> runCatching { fill(out) }.getOrNull() } ?: out
         db.withTransaction {
-            if (out.isNotEmpty()) { dao.deleteEpisodes(t.key); dao.insertEpisodes(out) }
+            if (complete.isNotEmpty()) { dao.deleteEpisodes(t.key); dao.insertEpisodes(complete) }
             val info = root.obj("info")
             if (info != null) saveInfo(t.key, info, 0L) else dao.touchDetail(t.key, System.currentTimeMillis())
         }

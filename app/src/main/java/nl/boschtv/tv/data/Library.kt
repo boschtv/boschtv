@@ -159,12 +159,10 @@ class Library(private val user: UserDatabase, private val channels: ChannelDao, 
         if (eps.isEmpty()) return@withContext null
         val rows = dao.progressOf(pid(), titleKey).sortedByDescending { it.updatedAt }
         // The history knows an episode by season and number; which video that is comes from the current catalog.
-        fun indexOf(p: ProgressEntity) = eps.indexOfFirst { it.season == p.season && it.number == p.number }
         val current = rows.firstOrNull { !it.finished }
-        if (current != null) eps.getOrNull(indexOf(current))?.let { return@withContext it to current.positionMs }
         val lastDone = rows.firstOrNull { it.finished }
-        val next = lastDone?.let { eps.getOrNull(indexOf(it) + 1) }
-        (next ?: eps.first()) to 0L
+        resumeEpisode(eps, current?.season, current?.number, lastDone?.season, lastDone?.number)
+            .let { (e, isCurrent) -> e to if (isCurrent) current!!.positionMs else 0L }
     }
 
     suspend fun removeFromContinue(titleKey: String) = withContext(Dispatchers.IO) { dao.clearProgress(pid(), titleKey); changed() }
@@ -265,4 +263,21 @@ internal fun matchFavorites(
         out[f] = list
     }
     return out
+}
+
+/**
+ * The episode to play and whether it is the one in progress. An episode this provider does not list
+ * (it numbers a season differently, or dropped one) never sends the viewer back to the start of the
+ * series: the first episode after that point is taken instead.
+ */
+internal fun resumeEpisode(eps: List<EpisodeEntity>, season: Int?, number: Int?, doneSeason: Int?, doneNumber: Int?): Pair<EpisodeEntity, Boolean> {
+    fun EpisodeEntity.at() = this.season.toLong() * 100_000 + this.number
+    if (season != null && number != null) {
+        eps.firstOrNull { it.season == season && it.number == number }?.let { return it to true }
+        eps.firstOrNull { it.at() > season.toLong() * 100_000 + number }?.let { return it to false }
+    }
+    if (doneSeason != null && doneNumber != null) {
+        eps.firstOrNull { it.at() > doneSeason.toLong() * 100_000 + doneNumber }?.let { return it to false }
+    }
+    return eps.first() to false
 }

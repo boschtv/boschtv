@@ -3,14 +3,18 @@ package nl.boschtv.tv.data
 import androidx.room.withTransaction
 import com.squareup.moshi.JsonReader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import nl.boschtv.tv.core.JsonObj
 import nl.boschtv.tv.core.Service
+import nl.boschtv.tv.core.Titles
 import nl.boschtv.tv.core.asObj
 import nl.boschtv.tv.data.db.AppDatabase
+import nl.boschtv.tv.data.db.EpisodeEntity
 import nl.boschtv.tv.data.db.TrendEntity
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -190,6 +194,39 @@ class Trends(private val db: AppDatabase, private val http: OkHttpClient, privat
             if (best != null) return@withContext best.str("key")
         }
         null
+    }
+
+    /**
+     * Some providers list episodes as "Episodio 3" without a picture. For those, TMDB's name, picture and
+     * description of that episode are used; what the provider did give stays. One request per season that
+     * needs it (two when TMDB has no names in the viewer's language).
+     */
+    suspend fun completeEpisodes(eps: List<EpisodeEntity>): List<EpisodeEntity> = withContext(Dispatchers.IO) {
+        fun lacking(e: EpisodeEntity) = e.image.isNullOrBlank() || Titles.isPlaceholderEpisodeName(e.name)
+        if (!enabled || eps.none(::lacking)) return@withContext eps
+        val id = tmdbKey.find(eps.first().titleKey)?.takeIf { it.groupValues[1] == "s" }?.groupValues?.get(2) ?: return@withContext eps
+        val home = prefs.content().home.locale
+        fun season(n: Int, lang: String) = runCatching { item("tv/$id/season/$n?language=$lang") }.getOrNull()
+            ?.list("episodes").orEmpty().mapNotNull { it.asObj() }.mapNotNull { o -> o.long("episode_number")?.toInt()?.let { it to o } }.toMap()
+        val seasons = eps.filter(::lacking).map { it.season }.distinct().take(40).map { n ->
+            async {
+                val own = season(n, home)
+                // TMDB answers "Aflevering 3" itself when it has no name in that language: then English.
+                val english = if (home != "en-US" && own.values.any { Titles.isPlaceholderEpisodeName(it.str("name").orEmpty()) }) season(n, "en-US") else emptyMap()
+                n to (own to english)
+            }
+        }.awaitAll().toMap()
+        eps.map { e ->
+            if (!lacking(e)) return@map e
+            val (own, english) = seasons[e.season] ?: return@map e
+            val o = own[e.number] ?: return@map e
+            val name = listOf(o.str("name"), english[e.number]?.str("name")).firstOrNull { !it.isNullOrBlank() && !Titles.isPlaceholderEpisodeName(it) }
+            e.copy(
+                name = if (Titles.isPlaceholderEpisodeName(e.name) && name != null) name.take(120) else e.name,
+                image = e.image?.ifBlank { null } ?: o.str("still_path")?.ifBlank { null }?.let { "https://image.tmdb.org/t/p/w300$it" },
+                plot = e.plot?.ifBlank { null } ?: (o.str("overview")?.ifBlank { null } ?: english[e.number]?.str("overview")?.ifBlank { null })?.take(500),
+            )
+        }
     }
 
     private fun item(path: String): JsonObj? {
