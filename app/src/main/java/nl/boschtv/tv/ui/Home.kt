@@ -70,7 +70,10 @@ class Nav(
 
 /** Full-bleed artwork plus the essentials of whatever tile has focus. Purely local data: instant. */
 @Composable
-fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, showService: Boolean = true) {
+fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, showService: Boolean = true, compact: Boolean = false) {
+    // Compact (further down the rows): only a strip of artwork and the title line, so the rows get the screen.
+    val fadeEnd by androidx.compose.animation.core.animateFloatAsState(if (compact) 0.3f else 0.62f, tween(250), label = "fade")
+    val top by androidx.compose.animation.core.animateDpAsState(if (compact) 26.dp else 84.dp, tween(250), label = "top")
     // Text follows focus immediately; the big image waits a beat so fast scrolling stays smooth.
     var shown by remember { mutableStateOf(card) }
     LaunchedEffect(card?.key) { if (shown != null) delay(280); shown = card }
@@ -83,9 +86,9 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
         val previews by rememberContainer().prefs.previews.collectAsState(true to true)
         if (preview && previews.first) Preview(card, previews.second, Modifier.align(Alignment.TopEnd).fillMaxWidth(0.66f).fillMaxHeight(0.62f))
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Ink.Bg, 0.34f to Ink.Bg, 0.62f to Ink.Bg.copy(alpha = 0.35f), 1f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Ink.Bg.copy(alpha = 0.55f), 0.16f to Color.Transparent, 0.4f to Color.Transparent, 0.62f to Ink.Bg)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Ink.Bg.copy(alpha = 0.55f), fadeEnd * 0.26f to Color.Transparent, fadeEnd * 0.65f to Color.Transparent, fadeEnd to Ink.Bg)))
 
-        if (card != null) Column(Modifier.padding(start = EDGE, top = 84.dp).fillMaxWidth(0.5f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (card != null) Column(Modifier.padding(start = EDGE, top = top).fillMaxWidth(0.5f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val eyebrow = buildList {
                 if (card.isNew) add(Texts.get(R.string.label_new))
                 val inCinema = card.flags and nl.boschtv.tv.core.Flags.CINEMA != 0 && (card.year ?: 0) >= java.time.Year.now().value - 1
@@ -103,7 +106,7 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
                 genreLine(card.genres).ifBlank { null },
                 card.label,
             ))
-            card.plot?.let {
+            if (!compact) card.plot?.let {
                 Text(it, style = MaterialTheme.typography.bodyLarge, color = Ink.Soft, maxLines = if (titleLines > 1) 1 else 3, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp))
             }
@@ -112,7 +115,7 @@ fun Hero(card: Card?, modifier: Modifier = Modifier, preview: Boolean = false, s
 }
 
 @Composable
-fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, kids: Boolean = false, active: Boolean = true) {
+fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, kids: Boolean = false, active: Boolean = true, onDeep: (Boolean) -> Unit = {}) {
     val c = rememberContainer()
     val scope = rememberCoroutineScope()
     val catalogVersion by c.sync.version.collectAsState()
@@ -139,15 +142,21 @@ fun HomeScreen(kind: Int?, service: Service?, nav: Nav, focus: FocusRequester, k
         rows = c.recommender.home(kind, service?.bit ?: 0L, kids)
     }
     val loaded = rows != null
+    // Past the first row the menu bar steps aside and the artwork shrinks to a strip: the rows get the
+    // room, so the next one already shows. Up to the first row (or Back) brings both back.
+    val deep by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    LaunchedEffect(deep) { onDeep(deep) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onDeep(false) } }
+    val share by androidx.compose.animation.core.animateFloatAsState(if (deep) 0.74f else 0.52f, tween(250), label = "rows")
     LaunchedEffect(loaded, kind, service) {
         if (loaded) { delay(60); runCatching { first.requestFocus() } }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val list = rows
-        Hero(focused ?: list?.firstOrNull { it.cards.isNotEmpty() }?.cards?.first(), preview = active, showService = service == null)
+        Hero(focused ?: list?.firstOrNull { it.cards.isNotEmpty() }?.cards?.first(), preview = active && !deep, showService = service == null, compact = deep)
         val railsHeight = maxHeight * 0.52f
-        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.52f)) {
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(share)) {
             when {
                 list == null -> Unit   // the logo animation below covers the first load
                 list.isEmpty() -> Text(stringResource(R.string.nothing_yet),

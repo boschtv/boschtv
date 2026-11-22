@@ -58,6 +58,11 @@ a pairing code the first time and remembers them), installs and optimises the ap
 
 Many IPTV lines allow **one stream at a time**: close the app on one device before playing on another.
 
+**No subscription?** `tools/demo-provider/serve.py` is a stand-in provider with only freely licensed
+films (Blender Studio's open movies, Creative Commons and public-domain titles). Start it and log in
+with server `http://10.0.2.2:8089` on the emulator, any username and any password. Screenshots for the
+README are taken with it, so they show nothing but open content.
+
 ## 4. How it fits together
 
 ```

@@ -71,8 +71,10 @@ object Playback {
                 .build()
         }
         val load = if (live) {
-            // Start showing a zapped channel fast; keep only a modest buffer.
-            DefaultLoadControl.Builder().setBufferDurationsMs(4_000, 30_000, 1_000, 2_500).build()
+            // Start showing a zapped channel fast. Live TV cannot be loaded ahead, so the long upper limit only
+            // counts while it is paused: the player keeps loading for a few minutes (within a fixed amount of
+            // memory), which is what a pause on a channel without an archive plays on from.
+            DefaultLoadControl.Builder().setBufferDurationsMs(4_000, 300_000, 1_000, 2_500).setTargetBufferBytes(72 * 1024 * 1024).build()
         } else {
             DefaultLoadControl.Builder().setBufferDurationsMs(15_000, 60_000, 1_500, 4_000).build()
         }

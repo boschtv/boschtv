@@ -39,6 +39,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,7 +75,8 @@ import nl.boschtv.tv.data.db.ChannelEntity
 import nl.boschtv.tv.data.db.ProgrammeEntity
 import nl.boschtv.tv.ui.BoschTheme
 import nl.boschtv.tv.ui.Ink
-import nl.boschtv.tv.ui.Pill
+import nl.boschtv.tv.ui.ChoiceRow
+import nl.boschtv.tv.ui.MainButton
 import nl.boschtv.tv.ui.Tile
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -100,6 +105,15 @@ class LiveUi {
     var favorites by mutableStateOf<Set<Long>>(emptySet())
     /** Set while watching a programme from its beginning instead of live. */
     var replay by mutableStateOf<ProgrammeEntity?>(null)
+    /** Live TV that was paused or rewound: no longer at the live moment until Back (or another channel). */
+    var behind by mutableStateOf(false)
+    var paused by mutableStateOf(false)
+    /** How far behind live the picture is, while [behind]. */
+    var lagMs by mutableLongStateOf(0L)
+    /** Minutes until the sleep timer stops playback; 0 when it is off. */
+    var sleepLeft by mutableStateOf(0)
+    /** A short remark in the banner ("this channel cannot be rewound"). */
+    var hint by mutableStateOf<String?>(null)
 }
 
 private val HHMM = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -117,11 +131,20 @@ class LiveActivity : ComponentActivity() {
     private var released = false
     private var onScreen = false
     private var ext = "m3u8"
+    private lateinit var frameRate: FrameRateMatch
+    // Pausing and rewinding live TV. On the live stream itself a pause plays on from what the player
+    // holds in memory, and [lag] counts how far behind that is. A channel with an archive goes on from
+    // the provider's catch-up stream instead, which begins at [shiftStart] (clock time).
+    private var shiftStart: Long? = null
+    private var lag = 0L
+    private var pausedAt = 0L
+    private var okDown = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player = Playback.player(this, live = true)
+        frameRate = FrameRateMatch(this, player)
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 ui.buffering = state == Player.STATE_BUFFERING
@@ -133,6 +156,15 @@ class LiveActivity : ComponentActivity() {
         setContent { BoschTheme { LiveScreen(player, ui, ::channelsOf, ::pick, ::toggleFavorite, ::schedule, ::replay, ::openTimeline, ::gridSchedule) } }
         lifecycleScope.launch { c.library.favoriteChannelIds().collect { ui.favorites = it } }
         lifecycleScope.launch { init() }
+        lifecycleScope.launch {
+            while (true) {
+                delay(1000)
+                if (ui.behind && ui.replay == null) ui.lagMs = (System.currentTimeMillis() - position()).coerceAtLeast(0)
+                // The sleep timer ran out: stop and leave the app, so the TV can go to sleep by itself.
+                if (onScreen && c.sleep.due()) finishAffinity()
+                ui.sleepLeft = c.sleep.minutesLeft()
+            }
+        }
     }
 
     private suspend fun init() {
@@ -221,10 +253,83 @@ class LiveActivity : ComponentActivity() {
         showBanner()
     }
 
-    private fun skip(ms: Long) { player.seekTo((player.currentPosition + ms).coerceAtLeast(0)); showBanner() }
+    /** The clock time of the picture on screen. */
+    private fun position(): Long {
+        val start = shiftStart
+        return when {
+            start != null -> start + player.currentPosition
+            ui.paused -> pausedAt - lag
+            else -> System.currentTimeMillis() - lag
+        }
+    }
+
+    private fun toLive() { shiftStart = null; lag = 0; ui.behind = false; ui.paused = false; ui.lagMs = 0; ui.hint = null }
+
+    private fun pause() {
+        if (ui.paused) return
+        if (ui.replay == null && !ui.behind) ui.lagMs = 0
+        ui.paused = true
+        if (ui.replay == null) ui.behind = true
+        pausedAt = System.currentTimeMillis()
+        player.pause()
+        showBanner()
+    }
+
+    private fun resume() {
+        if (!ui.paused) return
+        val ch = ui.current ?: return
+        val onLiveStream = shiftStart == null && ui.replay == null
+        val gap = System.currentTimeMillis() - pausedAt
+        if (onLiveStream) lag += gap
+        ui.paused = false
+        // A short pause plays on from memory. After a longer one the stream has moved on: a channel with
+        // an archive goes on from there; one without plays what is still in memory and then returns to live.
+        if (onLiveStream && ch.archive && gap > 20_000) openShift(ch, System.currentTimeMillis() - lag) else player.play()
+        showBanner()
+    }
+
+    /** Goes on from the provider's archive at [fromMs] (clock time): after a long pause, or when rewinding live TV. */
+    private fun openShift(ch: ChannelEntity, fromMs: Long) {
+        val start = fromMs - fromMs % 60_000   // catch-up addresses count in whole minutes
+        val minutes = ((System.currentTimeMillis() - start) / 60_000).toInt().coerceIn(2, 360) + 3
+        shiftStart = start; lag = 0; ui.behind = true; ui.paused = false; ui.problem = null; ui.buffering = true
+        tuneJob?.cancel()
+        tuneJob = lifecycleScope.launch {
+            player.setMediaItem(Playback.item(c.prefs.source().timeshift(ch.id, start, minutes, c.prefs.serverZone())), fromMs - start)
+            player.prepare(); player.playWhenReady = true
+        }
+    }
+
+    private fun skip(ms: Long) {
+        val ch = ui.current ?: return
+        ui.hint = null
+        if (ui.replay != null) { player.seekTo((player.currentPosition + ms).coerceAtLeast(0)); showBanner(); return }
+        val now = System.currentTimeMillis()
+        val target = position() + ms
+        val start = shiftStart
+        val length = player.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }
+        when {
+            target >= now - 10_000 -> { tune(ch, immediate = true); return }   // caught up: live again
+            start != null && target >= start && (length == null || target - start < length) -> { player.seekTo(target - start); player.play(); ui.paused = false }
+            ch.archive -> openShift(ch, target)
+            // No archive: only as far as the stream itself reaches back (a few seconds to a few minutes).
+            ms < 0 && player.isCurrentMediaItemSeekable && player.currentPosition > 5_000 -> {
+                val back = minOf(-ms, player.currentPosition)
+                if (ui.paused) { lag += now - pausedAt; ui.paused = false }
+                player.seekTo(player.currentPosition - back); player.play(); lag += back; ui.behind = true
+            }
+            ms > 0 && start == null && player.isCurrentMediaItemSeekable -> {
+                if (ui.paused) { lag += now - pausedAt; ui.paused = false }
+                player.seekTo(player.currentPosition + ms); player.play(); lag = (lag - ms).coerceAtLeast(0)
+            }
+            else -> ui.hint = Texts.get(R.string.no_rewind)
+        }
+        ui.lagMs = (System.currentTimeMillis() - position()).coerceAtLeast(0)
+        showBanner()
+    }
 
     private fun tune(ch: ChannelEntity, immediate: Boolean = false) {
-        ui.replay = null
+        ui.replay = null; toLive()
         ui.current = ch; ui.programmes = emptyList(); ui.problem = null; ui.buffering = true
         showBanner()
         tuneJob?.cancel()
@@ -239,6 +344,7 @@ class LiveActivity : ComponentActivity() {
 
     private suspend fun open(ch: ChannelEntity) {
         if (released || !onScreen) return
+        toLive()
         player.setMediaItem(Playback.item(c.prefs.source().live(ch.id, ext)))
         player.prepare()
         player.playWhenReady = true
@@ -249,6 +355,8 @@ class LiveActivity : ComponentActivity() {
         val ch = ui.current ?: return
         if (!onScreen || released) return      // never reconnect from the background: it would steal the single stream
         if (ui.replay != null) { ui.problem = Texts.get(R.string.replay_failed); return }
+        // The archive piece ran out (caught up with live) or failed, or the memory of a pause is used up: live again.
+        if (ui.behind) { attempt = 0; lifecycleScope.launch { if (onScreen && !released && ui.current?.id == ch.id) open(ch) }; return }
         attempt++
         if (attempt == 2) ext = if (ext == "m3u8") "ts" else "m3u8"
         if (attempt > 6) ui.problem = Texts.get(R.string.channel_down)
@@ -268,7 +376,7 @@ class LiveActivity : ComponentActivity() {
     private fun showBanner() {
         ui.banner = true
         bannerJob?.cancel()
-        bannerJob = lifecycleScope.launch { delay(5000); ui.banner = false }
+        bannerJob = lifecycleScope.launch { delay(5000); while (ui.paused) delay(1000); ui.banner = false; ui.hint = null }
     }
 
     private fun digit(d: Int) {
@@ -288,8 +396,18 @@ class LiveActivity : ComponentActivity() {
     // Lint wrongly flags the documented super.dispatchKeyEvent call as restricted (androidx.core marker).
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val code = event.keyCode
+        val ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
+        // Plain live TV: a short OK opens the channel list, holding OK pauses (most TV remotes have no pause key).
+        if (ok && !ui.timeline && !ui.guide && ui.replay == null && !ui.behind) {
+            when {
+                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> okDown = true
+                event.action == KeyEvent.ACTION_DOWN && okDown -> { okDown = false; pause() }
+                event.action == KeyEvent.ACTION_UP && okDown -> { okDown = false; ui.banner = false; ui.guide = true }
+            }
+            return true
+        }
+        if (event.action != KeyEvent.ACTION_DOWN) { if (ok) okDown = false; return super.dispatchKeyEvent(event) }
         if (ui.timeline) {
             val g = ui.grid
             val list = ui.zapList
@@ -310,17 +428,22 @@ class LiveActivity : ComponentActivity() {
             if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_GUIDE) { ui.guide = false; return true }
             return super.dispatchKeyEvent(event)
         }
-        if (ui.replay != null) when (code) {
+        if (ui.replay != null || ui.behind) when (code) {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> { skip(-30_000); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { skip(30_000); return true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { if (player.isPlaying) player.pause() else player.play(); showBanner(); return true }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                if (event.repeatCount == 0) { if (ui.paused) resume() else pause() }
+                return true
+            }
             KeyEvent.KEYCODE_BACK -> { ui.current?.let { tune(it, immediate = true) }; return true }   // back to live
         }
         when (code) {
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PAUSE -> pause()
+            KeyEvent.KEYCODE_MEDIA_REWIND -> skip(-30_000)
             // Arrows follow the channel list: down is the next channel (1 -> 2), up the previous one.
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_UP -> zap(1)
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> zap(-1)
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MENU -> { ui.banner = false; ui.guide = true }
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MENU -> { ui.banner = false; ui.guide = true }
             // Right (or the remote's guide key) opens the timeline guide.
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_GUIDE -> openTimeline()
             KeyEvent.KEYCODE_INFO -> if (ui.banner) ui.banner = false else showBanner()
@@ -369,7 +492,7 @@ class LiveActivity : ComponentActivity() {
     ) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             AndroidView(
-                factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false } },
+                factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false }.also { frameRate.view = it } },
                 modifier = Modifier.fillMaxSize(),
             )
             if (ui.buffering && ui.problem == null && !ui.guide && !ui.timeline) Spinner(Modifier.align(Alignment.Center))
@@ -382,10 +505,10 @@ class LiveActivity : ComponentActivity() {
 
             // At the top: channels put their own subtitles at the bottom, and the banner must not cover them.
             AnimatedVisibility(ui.banner && !ui.guide && !ui.timeline, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
-                ui.current?.let { Banner(it, numberOf(it), ui.programmes, ui.replay) }
+                ui.current?.let { Banner(it, numberOf(it), ui.programmes, ui.replay, ui) }
             }
             AnimatedVisibility(ui.guide, enter = slideInHorizontally { -it / 3 } + fadeIn(), exit = slideOutHorizontally { -it / 3 } + fadeOut()) {
-                Guide(ui, channelsOf, onPick, onFavorite, schedule, onReplay, onTimeline)
+                Guide(ui, channelsOf, onPick, onFavorite, schedule, onReplay, onTimeline, { ui.guide = false; pause() }, { c.sleep.cycle(); ui.sleepLeft = c.sleep.minutesLeft() })
             }
             AnimatedVisibility(ui.timeline, enter = fadeIn(), exit = fadeOut()) {
                 Timeline(ui.grid, ui.zapList, ui.groups.firstOrNull { it.id == ui.zapGroup }?.name ?: "", ui.current?.id, gridSchedule)
@@ -395,7 +518,7 @@ class LiveActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEntity>, replay: ProgrammeEntity? = null) {
+private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEntity>, replay: ProgrammeEntity?, ui: LiveUi) {
     Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xF00A0A24), Color.Transparent))).padding(start = 48.dp, end = 48.dp, top = 32.dp, bottom = 64.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Text(if (number > 0) "$number" else "", style = MaterialTheme.typography.displayLarge, color = Ink.AccentSoft)
@@ -405,14 +528,26 @@ private fun Banner(ch: ChannelEntity, number: Int, programmes: List<ProgrammeEnt
                 val now = programmes.getOrNull(0)
                 if (replay != null) {
                     Text(stringResource(R.string.from_start_banner, hhmm(replay.start), replay.title), style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
+                    Text(ui.hint ?: stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
+                } else if (ui.behind) {
+                    val minutes = (ui.lagMs / 60_000).toInt()
+                    val state = when {
+                        ui.paused -> stringResource(R.string.live_paused)
+                        minutes < 1 -> stringResource(R.string.behind_live_short)
+                        else -> stringResource(R.string.behind_live, minutes)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.tv.material3.Icon(if (ui.paused) Icons.Rounded.Pause else Icons.Rounded.History, null, Modifier.size(22.dp), tint = Ink.AccentSoft)
+                        Text(state, style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(ui.hint ?: stringResource(R.string.replay_keys), style = MaterialTheme.typography.titleMedium, color = Ink.Muted)
                 } else if (now != null) {
                     Text("${hhmm(now.start)}  ${now.title}", style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ProgressLine(now, Modifier.fillMaxWidth(0.5f))
                     programmes.getOrNull(1)?.let { Text(stringResource(R.string.up_next, hhmm(it.start), it.title), style = MaterialTheme.typography.titleMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
-            Text(stringResource(R.string.live_keys), style = MaterialTheme.typography.labelLarge, color = Ink.Muted)
+            if (replay == null && !ui.behind) Text(stringResource(R.string.live_keys), style = MaterialTheme.typography.labelLarge, color = Ink.Muted)
         }
     }
 }
@@ -434,6 +569,8 @@ private fun Guide(
     schedule: suspend (ChannelEntity) -> List<ProgrammeEntity>,
     onReplay: (ChannelEntity, ProgrammeEntity) -> Unit,
     onTimeline: () -> Unit,
+    onPause: () -> Unit,
+    onSleep: () -> Unit,
 ) {
     var group by remember { mutableStateOf(ui.zapGroup) }
     var channels by remember { mutableStateOf(ui.zapList) }
@@ -449,10 +586,18 @@ private fun Guide(
         LazyColumn(Modifier.width(206.dp).fillMaxHeight(), contentPadding = PaddingValues(start = 28.dp, top = 36.dp, bottom = 36.dp, end = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             item(key = "timeline") {
-                Pill(stringResource(R.string.tv_guide), onTimeline, Modifier.fillMaxWidth().padding(bottom = 8.dp), primary = true, icon = Icons.Rounded.DateRange)
+                MainButton(stringResource(R.string.tv_guide), onTimeline, Modifier.fillMaxWidth().padding(bottom = 8.dp), icon = Icons.Rounded.DateRange)
+            }
+            // What most remotes have no key for.
+            item(key = "pause") {
+                ChoiceRow(stringResource(R.string.pause), false, onPause, icon = Icons.Rounded.Pause)
+            }
+            item(key = "sleep") {
+                ChoiceRow(if (ui.sleepLeft > 0) stringResource(R.string.sleep_in, ui.sleepLeft) else stringResource(R.string.sleep_timer), ui.sleepLeft > 0, onSleep,
+                    Modifier.padding(bottom = 12.dp), icon = Icons.Rounded.Bedtime)
             }
             items(ui.groups, key = { it.id }) { g ->
-                Pill(g.name, { group = g.id; if (g.id == ui.zapGroup) channels = ui.zapList }, Modifier.fillMaxWidth(), selected = g.id == group)
+                ChoiceRow(g.name, g.id == group, { group = g.id; if (g.id == ui.zapGroup) channels = ui.zapList })
             }
         }
         LazyColumn(Modifier.width(370.dp).fillMaxHeight(), state = listState,
@@ -504,7 +649,7 @@ private fun Guide(
                                     p.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 3, overflow = TextOverflow.Ellipsis) }
                                     // Channels with catch-up: start the current programme from its beginning.
                                     if (ch.archive && p.start < System.currentTimeMillis()) {
-                                        Pill(stringResource(R.string.watch_from_start), { onReplay(ch, p) }, Modifier.padding(top = 8.dp), selected = true)
+                                        MainButton(stringResource(R.string.watch_from_start), { onReplay(ch, p) }, Modifier.padding(top = 8.dp), primary = false)
                                     }
                                 }
                             }

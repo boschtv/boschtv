@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
@@ -52,6 +53,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -71,6 +73,7 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import nl.boschtv.tv.App
@@ -80,7 +83,9 @@ import nl.boschtv.tv.data.db.KIND_MOVIE
 import nl.boschtv.tv.data.db.TitleEntity
 import nl.boschtv.tv.ui.BoschTheme
 import nl.boschtv.tv.ui.Ink
-import nl.boschtv.tv.ui.Pill
+import nl.boschtv.tv.ui.ChoiceRow
+import nl.boschtv.tv.ui.IconAction
+import nl.boschtv.tv.ui.MainButton
 import java.util.Locale
 
 data class TrackOption(val label: String, val selected: Boolean, val select: () -> Unit)
@@ -109,6 +114,12 @@ class VodUi {
     var segments by mutableStateOf<nl.boschtv.tv.data.Segments?>(null)
     /** Any key during the credits countdown keeps you in the credits. */
     var stayInCredits by mutableStateOf(false)
+    /** What the film or episode is about; shown while paused. */
+    var plot by mutableStateOf<String?>(null)
+    /** Playing an episode of a series (not a film): the player offers its episode list. */
+    var episodes by mutableStateOf(false)
+    /** Several episodes went by without anyone touching the remote: ask before starting another. */
+    var stillWatching by mutableStateOf(false)
 
     /** The "Skip intro" / "Skip recap" button while one is playing: its text and where it jumps to. */
     val skip: Pair<Int, Long>?
@@ -165,11 +176,17 @@ class PlayerActivity : ComponentActivity() {
     private var frameWatch: kotlinx.coroutines.Job? = null
     private var awaitingFrame = false
     private var lastScrubAt = 0L
+    private lateinit var frameRate: FrameRateMatch
+    private var sleepCheck = true
+    /** Episodes that started by themselves since the remote was last touched. */
+    private var unattended = 0
+    private var stillJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player = Playback.player(this, live = false)
+        frameRate = FrameRateMatch(this, player)
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { ui.playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) {
@@ -191,18 +208,23 @@ class PlayerActivity : ComponentActivity() {
                 } else ui.error = Texts.get(R.string.play_failed)
             }
         })
-        setContent { BoschTheme { VodScreen(player, ui, ::toggle, ::restart, ::playNext, { scrub(it > 0, 0) }) { finish() } } }
+        setContent { BoschTheme { VodScreen(player, ui, ::toggle, ::restart, ::playNext, { scrub(it > 0, 0) }, { frameRate.view = it },
+            VodActions(::keepWatching)) { finish() } } }
         lifecycleScope.launch { load() }
+        lifecycleScope.launch { sleepCheck = c.prefs.sleepCheck.first() }
         lifecycleScope.launch {
             var tick = 0
             while (isActive) {
                 delay(500)
                 if (released || !onScreen) continue
+                // The sleep timer ran out: stop and leave the app, so the TV can go to sleep by itself.
+                if (c.sleep.due()) { save(); finishAffinity(); continue }
+                if (ui.stillWatching) continue
                 ui.position = player.currentPosition.coerceAtLeast(0)
                 ui.duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
                 // Credits reached and nobody pressed Back: on to the next episode after the countdown.
                 val at = ui.creditsAt
-                if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) playNext()
+                if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) autoNext()
                 // Skip times need the file's length to pick the right release: ask once it is known.
                 val ep = episode
                 if (ep != null && ui.duration > 0 && segmentsFor != ep.id) {
@@ -226,7 +248,7 @@ class PlayerActivity : ComponentActivity() {
             val savedStream = saved?.streamId?.takeIf { id -> c.catalog.versions(t).any { it.streamId == id } }
             streamId = intent.getLongExtra(Playback.STREAM, 0).takeIf { it != 0L } ?: savedStream ?: t.sourceId
             container = intent.getStringExtra(Playback.CONTAINER) ?: saved?.container?.takeIf { savedStream == streamId } ?: t.container
-            ui.title = t.name; ui.subtitle = t.year?.toString()
+            ui.title = t.name; ui.subtitle = t.year?.toString(); ui.plot = t.lPlot ?: t.dPlot ?: t.pPlot
             start(c.prefs.source().movie(streamId, container), if (restart || saved?.finished == true) 0 else saved?.positionMs ?: 0)
         } else {
             if (c.catalog.episodes(key).isEmpty()) c.catalog.detail(key, maxAgeMs = 0)
@@ -241,6 +263,8 @@ class PlayerActivity : ComponentActivity() {
 
     private suspend fun startEpisode(ep: EpisodeEntity, positionMs: Long) {
         episode = ep
+        ui.episodes = true
+        ui.plot = ep.plot
         ui.title = title?.name.orEmpty()
         ui.subtitle = Texts.get(R.string.episode_line, ep.season, ep.number, ep.name)
         ui.next = c.library.nextEpisode(ep.titleKey, ep.id)
@@ -258,7 +282,28 @@ class PlayerActivity : ComponentActivity() {
 
     private fun onEnded() {
         save(ended = true)
-        if (ui.next != null) playNext() else finish()
+        if (ui.next != null) autoNext() else finish()
+    }
+
+    /** The next episode starting by itself. After three in a row that nobody touched the remote for, ask first. */
+    private fun autoNext() {
+        if (ui.stillWatching) return
+        if (sleepCheck && ++unattended >= 3) {
+            save(ended = true)
+            player.pause()
+            ui.stillWatching = true; ui.visible = false; ui.tracksOpen = false
+            // Nobody answers: they are asleep or gone. Leave the app so the stream is freed and the TV can sleep.
+            stillJob?.cancel()
+            stillJob = lifecycleScope.launch { delay(5 * 60_000L); if (ui.stillWatching) finishAffinity() }
+            return
+        }
+        playNext()
+    }
+
+    private fun keepWatching() {
+        stillJob?.cancel()
+        ui.stillWatching = false; unattended = 0
+        playNext()
     }
 
     private fun playNext() {
@@ -268,6 +313,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun restart() { player.seekTo(0); player.play(); show() }
+
     private fun toggle() { if (player.isPlaying) player.pause() else player.play(); show() }
     private fun show() { ui.visible = true; ui.touched = System.currentTimeMillis() }
 
@@ -340,7 +386,7 @@ class PlayerActivity : ComponentActivity() {
         fun options(type: Int): List<TrackOption> = tracks.groups.filter { it.type == type }.flatMap { g ->
             (0 until g.length).filter { g.isTrackSupported(it) }.map { i ->
                 val f = g.getTrackFormat(i)
-                val lang = f.language?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale("nl")) }?.replaceFirstChar(Char::uppercase)
+                val lang = f.language?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale.getDefault()) }?.replaceFirstChar(Char::uppercase)
                 val label = listOfNotNull(lang ?: f.label ?: Texts.get(R.string.track_n, i + 1), f.label?.takeIf { lang != null && it != lang }).joinToString(" · ")
                 TrackOption(label, g.isTrackSelected(i)) {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -360,6 +406,11 @@ class PlayerActivity : ComponentActivity() {
     @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+        unattended = 0
+        if (ui.stillWatching) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) { finish(); return true }
+            return super.dispatchKeyEvent(event)
+        }
         val wasVisible = ui.visible
         val floating = ui.floating   // as it was before this key
         ui.touched = System.currentTimeMillis()
@@ -435,17 +486,20 @@ class PlayerActivity : ComponentActivity() {
     override fun onDestroy() { super.onDestroy(); releasePlayer() }
 }
 
+class VodActions(val keepWatching: () -> Unit)
+
 @Composable
 private fun VodScreen(
     player: ExoPlayer, ui: VodUi,
-    onToggle: () -> Unit, onRestart: () -> Unit, onNext: () -> Unit, onSeek: (Long) -> Unit, onClose: () -> Unit,
+    onToggle: () -> Unit, onRestart: () -> Unit, onNext: () -> Unit, onSeek: (Long) -> Unit, onView: (PlayerView) -> Unit, actions: VodActions, onClose: () -> Unit,
 ) {
     val playFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
     val seekFocus = remember { FocusRequester() }
+    val moreFocus = remember { FocusRequester() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
-            factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false } },
+            factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false }.also(onView) },
             modifier = Modifier.fillMaxSize(),
         )
         if (ui.buffering && ui.error == null) Spinner(Modifier.align(Alignment.Center))
@@ -455,58 +509,72 @@ private fun VodScreen(
                 Column(Modifier.padding(start = 48.dp, top = 36.dp).fillMaxWidth(0.7f)) {
                     Text(ui.title, style = MaterialTheme.typography.headlineLarge, color = Ink.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     ui.subtitle?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.Soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    // Paused: what this film or episode is about.
+                    if (!ui.playing && !ui.buffering && ui.error == null) ui.plot?.let {
+                        Text(it, style = MaterialTheme.typography.bodyLarge, color = Ink.Text, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
+                    }
                 }
                 ui.error?.let {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(it, style = MaterialTheme.typography.titleLarge, color = Ink.Text)
-                        Pill(stringResource(R.string.back), onClose, primary = true)
+                        MainButton(stringResource(R.string.back), onClose)
                     }
                 }
                 Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 48.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SeekBar(ui, onSeek, seekFocus, playFocus)
-                    if (!ui.scrubbing) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Pill(stringResource(if (ui.playing) R.string.pause else R.string.play), onToggle, Modifier.focusRequester(playFocus), primary = true,
-                            icon = if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow)
-                        Pill(stringResource(R.string.from_start), onRestart, icon = Icons.Rounded.Replay, selected = true)
-                        if (ui.text.isNotEmpty() || ui.audio.size > 1) Pill(stringResource(R.string.subs_audio), { ui.tracksOpen = true }, icon = Icons.Rounded.Subtitles, selected = true)
-                        if (ui.next != null) Pill(if (ui.nearEnd && !(ui.inCredits && ui.stayInCredits)) stringResource(R.string.next_ep_in, ui.nextIn) else stringResource(R.string.next_episode), onNext, Modifier.focusRequester(nextFocus), icon = Icons.Rounded.SkipNext, selected = true)
+                    // Play sits in front of the time bar; the few other things are plain icons underneath, which
+                    // name themselves when the remote is on them.
+                    SeekBar(ui, onSeek, seekFocus, moreFocus) {
+                        IconAction(if (ui.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(if (ui.playing) R.string.pause else R.string.play), onToggle,
+                            Modifier.focusRequester(playFocus).focusProperties { down = moreFocus }, size = 40.dp, caption = false)
+                    }
+                    if (!ui.scrubbing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconAction(Icons.Rounded.Replay, stringResource(R.string.from_start), onRestart, Modifier.focusRequester(moreFocus), plain = true)
+                        if (ui.next != null) {
+                            val counting = ui.nearEnd && !(ui.inCredits && ui.stayInCredits)
+                            IconAction(Icons.Rounded.SkipNext, if (counting) stringResource(R.string.next_ep_in, ui.nextIn) else stringResource(R.string.next_episode), onNext,
+                                Modifier.focusRequester(nextFocus), pinned = counting, plain = true)
+                        }
+                        // A series: straight to its episode list (the page under the player).
+                        if (ui.episodes) IconAction(Icons.AutoMirrored.Rounded.List, stringResource(R.string.episodes), onClose, plain = true)
+                        if (ui.text.isNotEmpty() || ui.audio.size > 1) IconAction(Icons.Rounded.Subtitles, stringResource(R.string.subs_audio), { ui.tracksOpen = true }, plain = true)
                     }
                 }
             }
         }
         // After skipping the time bar keeps the remote (left/right go on skipping); otherwise Play/Pause has it.
         LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen, ui.seeking) {
-            if (ui.visible && !ui.scrubbing && !ui.tracksOpen) { delay(80); runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() } }
+            if (ui.visible && !ui.scrubbing && !ui.tracksOpen && !ui.stillWatching) { delay(80); runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() } }
         }
         // Skip intro / Skip recap / Next episode: one button over the picture, without the control bar.
         // While the bar is hidden it has the focus (white), so a single OK presses it.
         val floating = ui.floating
         val floatFocus = remember { FocusRequester() }
-        AnimatedVisibility(floating != null && !ui.scrubbing && !ui.tracksOpen, enter = fadeIn(), exit = fadeOut(),
+        AnimatedVisibility(floating != null && !ui.scrubbing && !ui.tracksOpen && !ui.stillWatching, enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = if (ui.visible) 150.dp else 48.dp)) {
             val label = when (floating) {
                 is Floating.Skip -> stringResource(floating.label)
                 is Floating.Next -> floating.inSeconds?.let { stringResource(R.string.next_ep_in, it) } ?: stringResource(R.string.next_episode)
                 null -> ""
             }
-            Pill(label, {
+            MainButton(label, {
                 when (floating) {
                     is Floating.Skip -> { player.seekTo(floating.to); ui.position = floating.to }
                     is Floating.Next -> onNext()
                     null -> Unit
                 }
-            }, Modifier.focusRequester(floatFocus), primary = true, icon = Icons.Rounded.SkipNext, height = 52.dp)
+            }, Modifier.focusRequester(floatFocus), icon = Icons.Rounded.SkipNext, height = 40.dp)
         }
         LaunchedEffect(floating?.javaClass, ui.visible) {
             if (floating != null && !ui.visible) { delay(120); runCatching { floatFocus.requestFocus() } }
         }
 
         if (ui.tracksOpen) TrackPanel(ui, Modifier.align(Alignment.CenterEnd))
+        if (ui.stillWatching) StillWatching(ui, actions.keepWatching, onClose)
     }
 }
 
 @Composable
-private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester, below: FocusRequester) {
+private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester, below: FocusRequester, leading: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shown = ui.scrubTo ?: ui.position
     ui.scrubTo?.let { to ->
@@ -517,6 +585,7 @@ private fun SeekBar(ui: VodUi, onSeek: (Long) -> Unit, focus: FocusRequester, be
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        leading()
         Text(clock(shown), style = MaterialTheme.typography.titleMedium, color = Ink.Text)
         Box(
             Modifier.weight(1f).height(18.dp)
@@ -550,34 +619,60 @@ private fun TrackPanel(ui: VodUi, modifier: Modifier) {
     LaunchedEffect(Unit) { delay(80); runCatching { first.requestFocus() } }
     LazyColumn(
         modifier.fillMaxHeight().width(360.dp).background(Ink.Bg.copy(alpha = 0.96f)).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (ui.text.isNotEmpty()) {
             item { Text(stringResource(R.string.subtitles), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(bottom = 6.dp)) }
             items(ui.text.size) { i ->
                 val o = ui.text[i]
-                Pill(o.label, { o.select(); ui.tracksOpen = false }, Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier), selected = o.selected)
+                ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0) Modifier.focusRequester(first) else Modifier)
             }
         }
         if (ui.audio.isNotEmpty()) {
             item { Text(stringResource(R.string.audio), style = MaterialTheme.typography.titleLarge, color = Ink.Text, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)) }
             items(ui.audio.size) { i ->
                 val o = ui.audio[i]
-                Pill(o.label, { o.select(); ui.tracksOpen = false }, Modifier.fillMaxWidth().then(if (i == 0 && ui.text.isEmpty()) Modifier.focusRequester(first) else Modifier), selected = o.selected)
+                ChoiceRow(o.label, o.selected, { o.select(); ui.tracksOpen = false }, if (i == 0 && ui.text.isEmpty()) Modifier.focusRequester(first) else Modifier)
             }
         }
     }
 }
 
-/** Loading indicator: a royal-blue arc chasing round a faint ring. */
+/** "Are you still watching?": the picture dimmed, the next episode waiting for a yes. */
+@Composable
+private fun StillWatching(ui: VodUi, onContinue: () -> Unit, onStop: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(120); runCatching { focus.requestFocus() } }
+    Box(Modifier.fillMaxSize().background(Color(0xD9000000)), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.still_watching), style = MaterialTheme.typography.displayMedium, color = Ink.Text)
+            Text(listOfNotNull(ui.title, ui.next?.let { stringResource(R.string.episode_line, it.season, it.number, it.name) }).joinToString("  ·  "),
+                style = MaterialTheme.typography.titleLarge, color = Ink.Soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MainButton(stringResource(R.string.keep_watching), onContinue, Modifier.focusRequester(focus), icon = Icons.Rounded.PlayArrow)
+                MainButton(stringResource(R.string.stop_watching), onStop, primary = false)
+            }
+        }
+    }
+}
+
+/** Loading indicator: a comet. A bright head with a tail that fades out behind it, going round. */
 @Composable
 fun Spinner(modifier: Modifier = Modifier) {
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "spin")
     val angle by t.animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(
-        androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
-    androidx.compose.foundation.Canvas(modifier.size(52.dp)) {
-        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawArc(Color(0x40FFFFFF), 0f, 360f, useCenter = false, style = stroke)
-        drawArc(Ink.Accent, angle, 100f, useCenter = false, style = stroke)
+        androidx.compose.animation.core.tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
+    // The tail grows and shrinks as it goes, which reads as effort rather than as a clock hand.
+    val tail by t.animateFloat(110f, 280f, androidx.compose.animation.core.infiniteRepeatable(
+        androidx.compose.animation.core.tween(1400, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "tail")
+    androidx.compose.foundation.Canvas(modifier.size(46.dp)) {
+        val width = 3.5.dp.toPx()
+        val inset = width / 2
+        val box = androidx.compose.ui.geometry.Size(size.width - width, size.height - width)
+        val fade = Brush.sweepGradient(0f to Color.Transparent, tail / 360f * 0.6f to Ink.Accent, tail / 360f to Ink.Text, 1f to Color.Transparent)
+        rotate(angle) {
+            drawArc(fade, 0f, tail, useCenter = false, topLeft = androidx.compose.ui.geometry.Offset(inset, inset), size = box,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = width, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        }
     }
 }

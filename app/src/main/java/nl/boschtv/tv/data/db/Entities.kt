@@ -135,6 +135,9 @@ data class ProgrammeEntity(
     val description: String?,
 )
 
+/** A programme found in the guide, with the channel it is on. */
+data class GuideHit(val channelId: Long, val channelName: String, val logo: String?, val start: Long, val stop: Long, val title: String)
+
 /** Ranked lists from TMDB: "trend" (this week, everything) and "svc:<SERVICE>" (new and popular on a service in NL). */
 @Entity(tableName = "trending", primaryKeys = ["listId", "rank"])
 data class TrendEntity(val listId: String, val rank: Int, val titleKey: String)

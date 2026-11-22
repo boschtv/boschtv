@@ -325,6 +325,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         if (ok) {
             runCatching { c.library.refreshNextUp() }
             runCatching { c.trends.refresh() }
+            runCatching { c.refreshGuide() }
             runCatching { c.enricher.run(maxItems = 150) }
             runCatching { c.watchNext.publish() }
         }

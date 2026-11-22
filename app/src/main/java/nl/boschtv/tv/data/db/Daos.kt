@@ -83,7 +83,14 @@ interface ChannelDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertProgrammes(items: List<ProgrammeEntity>)
     @Query("DELETE FROM programmes WHERE channelId = :id") suspend fun clearProgrammes(id: Long)
+    @Query("DELETE FROM programmes WHERE channelId IN (:ids)") suspend fun clearProgrammesOf(ids: List<Long>)
     @Query("DELETE FROM programmes WHERE stop < :before") suspend fun pruneProgrammes(before: Long)
+
+    /** Programmes whose title contains [q] and that have not ended yet, soonest first. */
+    @Query("SELECT p.channelId AS channelId, c.name AS channelName, c.logo AS logo, p.start AS start, p.stop AS stop, p.title AS title " +
+        "FROM programmes p JOIN channels c ON c.id = p.channelId " +
+        "WHERE p.stop > :now AND p.title LIKE '%' || :q || '%' ORDER BY p.start, c.sort LIMIT :limit")
+    suspend fun searchProgrammes(q: String, now: Long, limit: Int): List<GuideHit>
     @Query("SELECT * FROM programmes WHERE channelId = :id AND stop > :from ORDER BY start LIMIT :limit")
     suspend fun programmes(id: Long, from: Long, limit: Int): List<ProgrammeEntity>
 }

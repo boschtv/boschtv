@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
@@ -119,7 +121,7 @@ fun Tile(
     ) { content() }
 }
 
-/** Pill button: white when focused. */
+/** Small button or choice (season, filter, setting): the same soft rectangle as [MainButton], white when focused. */
 @Composable
 fun Pill(
     text: String,
@@ -128,12 +130,12 @@ fun Pill(
     selected: Boolean = false,
     primary: Boolean = false,
     icon: ImageVector? = null,
-    height: Dp = 40.dp,
+    height: Dp = 32.dp,
 ) {
     Surface(
         onClick = onClick,
         modifier = modifier.height(height),
-        shape = ClickableSurfaceDefaults.shape(PillShape),
+        shape = ClickableSurfaceDefaults.shape(Shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = when { primary -> Ink.Accent; selected -> Ink.SurfaceHi; else -> Color.Transparent },
@@ -141,10 +143,104 @@ fun Pill(
             contentColor = if (selected || primary) Ink.Text else Ink.Soft, focusedContentColor = Ink.Bg,
         ),
     ) {
-        Row(Modifier.padding(horizontal = if (text.isEmpty()) 10.dp else 18.dp).height(height), verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) Icon(icon, contentDescription = text.ifEmpty { null }, modifier = Modifier.size(20.dp))
+        Row(Modifier.padding(horizontal = if (text.isEmpty()) 8.dp else 14.dp).height(height), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) Icon(icon, contentDescription = text.ifEmpty { null }, modifier = Modifier.size(18.dp))
             if (icon != null && text.isNotEmpty()) Box(Modifier.width(8.dp))
             if (text.isNotEmpty()) Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
+    }
+}
+
+/** What is not under the remote sits on a faint white wash, so it reads on any picture behind it. */
+private val Wash = Color(0x24FFFFFF)
+
+/** The one labelled button of a screen (Play, Skip intro): a soft rectangle, blue until the remote is on it. */
+@Composable
+fun MainButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    primary: Boolean = true,
+    height: Dp = 36.dp,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(height),
+        shape = ClickableSurfaceDefaults.shape(Shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (primary) Ink.Accent else Wash,
+            focusedContainerColor = Ink.Text, pressedContainerColor = Ink.Text,
+            contentColor = Ink.Text, focusedContentColor = Ink.Bg,
+        ),
+    ) {
+        Row(Modifier.height(height).padding(start = if (icon != null) 12.dp else 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp)); Box(Modifier.width(6.dp)) }
+            Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1)
+        }
+    }
+}
+
+/**
+ * Round icon button for everything beside the main one. It says what it does in a line underneath, only
+ * while the remote is on it ([pinned]: always, for a countdown). [active] marks a choice that is on.
+ */
+@Composable
+fun IconAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 36.dp,
+    active: Boolean = false,
+    pinned: Boolean = false,
+    /** Just the icon, no disc behind it until the remote is on it: for a bar of many buttons over a picture. */
+    plain: Boolean = false,
+    /** False: no line underneath at all, for a button that sits inside a row of other things. */
+    caption: Boolean = true,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Column(Modifier.width(size), horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            onClick = onClick,
+            modifier = modifier.size(size).onFocusChanged { focused = it.isFocused },
+            shape = ClickableSurfaceDefaults.shape(CircleShape),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = when { active -> Ink.Accent; plain -> Color.Transparent; else -> Wash },
+                focusedContainerColor = Ink.Text, pressedContainerColor = Ink.Text,
+                contentColor = Ink.Text, focusedContentColor = Ink.Bg,
+            ),
+        ) {
+            Box(Modifier.size(size), contentAlignment = Alignment.Center) { Icon(icon, contentDescription = label, modifier = Modifier.size(size * if (plain) 0.62f else 0.5f)) }
+        }
+        // Wider than the button it belongs to, so it is laid out without pushing the neighbours aside.
+        if (caption) Text(
+            if (focused || pinned) label else "", style = MaterialTheme.typography.labelMedium, color = if (focused) Ink.Text else Ink.Soft,
+            maxLines = 1, softWrap = false,
+            modifier = Modifier.padding(top = 6.dp).wrapContentWidth(Alignment.CenterHorizontally, unbounded = true),
+        )
+    }
+}
+
+/** One line in a list (a subtitle or audio track, a channel list, an action): a row with a tick on the one that is on. */
+@Composable
+fun ChoiceRow(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().height(38.dp),
+        shape = ClickableSurfaceDefaults.shape(Shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent, focusedContainerColor = Ink.Text, pressedContainerColor = Ink.Text,
+            contentColor = if (selected) Ink.Text else Ink.Soft, focusedContentColor = Ink.Bg,
+        ),
+    ) {
+        Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)); Box(Modifier.width(10.dp)) }
+            Text(text, style = if (selected) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (selected) Icon(androidx.compose.material.icons.Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -190,14 +286,23 @@ fun PosterCard(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, o
 val WIDE_W = 236.dp
 
 @Composable
-fun WideCard(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, onFocus: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null) {
+fun WideCard(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, onFocus: (() -> Unit)? = null, onLongClick: (() -> Unit)? = null, description: String? = null) {
     Column(Modifier.width(WIDE_W)) {
         Tile(onClick, modifier.size(WIDE_W, 133.dp), onFocus = onFocus, onLongClick = onLongClick, scale = 1.05f) {
             Box(Modifier.fillMaxSize()) {
                 Art(card.wideImage ?: card.backdrop ?: card.poster, card.title, Modifier.fillMaxSize(), size = "w500")
                 card.progress?.let { p ->
-                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66000000))) {
-                        Box(Modifier.fillMaxWidth(p.coerceIn(0.02f, 1f)).height(4.dp).background(Ink.Accent))
+                    if (p >= 0.999f) {
+                        // Seen to the end: a tick in the corner says it at a glance, no bar needed.
+                        Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(22.dp).background(Color(0xB3000000), CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(androidx.compose.material.icons.Icons.Rounded.Check, contentDescription = null, tint = Ink.Text, modifier = Modifier.size(15.dp))
+                        }
+                    } else {
+                        // How far you are: a rounded bar that floats inside the picture, on a shade so it reads on any image.
+                        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(44.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000)))))
+                        Box(Modifier.align(Alignment.BottomStart).padding(start = 10.dp, end = 10.dp, bottom = 9.dp).fillMaxWidth().height(4.dp).background(Color(0x59FFFFFF), CircleShape)) {
+                            Box(Modifier.fillMaxWidth(p.coerceIn(0.03f, 1f)).height(4.dp).background(Ink.Text, CircleShape))
+                        }
                     }
                 }
             }
@@ -207,6 +312,9 @@ fun WideCard(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, onF
         card.label?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = Ink.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        // An episode: what it is about, in a few lines.
+        if (!description.isNullOrBlank()) Text(description, style = MaterialTheme.typography.bodyMedium, color = Ink.Soft, maxLines = 3,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -273,7 +381,7 @@ fun CardRow(
         Box(Modifier.height(ROW_TITLE_H.dp).padding(start = EDGE), contentAlignment = Alignment.CenterStart) {
             Text(row.title, style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1)
         }
-        // Rows longer than the screen go round one way, as on Netflix: they start on the first card with
+        // Rows longer than the screen go round one way, as on the big streaming services: they start on the first card with
         // nothing to its left, and past the last card comes the first again; once round, left goes back
         // across that seam. Ranked rows (Top 10, Popular) keep their ends, and so do short rows, so a card
         // never shows twice at once.
@@ -367,7 +475,7 @@ fun duration(secs: Long): String = when {
 }
 
 /**
- * One entry in a menu bar (the top bar, and the bar inside a streaming service). The page you are on is marked with a blue underline; the white pill is
+ * One entry in a menu bar (the top bar, and the bar inside a streaming service). The page you are on is marked with a blue underline; the white fill is
  * reserved for where the remote is right now, so the two never get confused.
  */
 @Composable
@@ -378,15 +486,15 @@ fun NavItem(
     var focused by remember { mutableStateOf(false) }
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = modifier.then(Modifier.height(40.dp).then(androidx.compose.ui.Modifier).onFocusChanged { focused = it.isFocused }),
-        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(PillShape),
+        modifier = modifier.then(Modifier.height(34.dp).then(androidx.compose.ui.Modifier).onFocusChanged { focused = it.isFocused }),
+        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(Shape),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent, focusedContainerColor = Ink.Text, pressedContainerColor = Ink.Text,
             contentColor = if (selected) Color.White else Ink.Muted, focusedContentColor = Ink.Bg,
         ),
     ) {
-        Box(Modifier.height(40.dp).padding(horizontal = if (label.isEmpty()) 11.dp else 16.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.height(34.dp).padding(horizontal = if (label.isEmpty()) 9.dp else 14.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 if (icon != null) androidx.tv.material3.Icon(icon, description, Modifier.size(if (label.isEmpty()) 20.dp else 17.dp))
                 if (label.isNotEmpty()) Text(label, style = if (selected) MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else MaterialTheme.typography.titleMedium, maxLines = 1)

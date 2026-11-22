@@ -138,8 +138,9 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
         Column(Modifier.fillMaxSize()) {
             // Full header while you are on its buttons; once you move down into seasons and episodes it
             // collapses to the title line so the list gets the room. Going back up expands it again.
+            // The full header leaves room for the line that names the focused button.
             val headerHeight by androidx.compose.animation.core.animateDpAsState(
-                when { inRows && titleLines > 1 -> 174.dp; inRows -> 134.dp; titleLines > 1 -> 336.dp; else -> 296.dp }, label = "header")
+                when { inRows && titleLines > 1 -> 174.dp; inRows -> 134.dp; titleLines > 1 -> 344.dp; else -> 304.dp }, label = "header")
             Box(Modifier.fillMaxWidth().height(headerHeight).clipToBounds()) {
                 Column(Modifier.padding(start = EDGE, top = 40.dp).fillMaxWidth(0.52f).wrapContentHeight(Alignment.Top, unbounded = true), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val eyebrow = (listOf(stringResource(if (t.kind == KIND_MOVIE) R.string.kind_movie else R.string.kind_series).uppercase()) + Service.of(t.services).take(2).map { it.label.uppercase() }).joinToString(" · ")
@@ -165,39 +166,35 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
                     Row(Modifier.padding(top = 10.dp).wrapContentWidth(Alignment.Start, unbounded = true)
                         .onFocusChanged { f -> if (f.hasFocus && !buttonsHadFocus && inRowsBefore) runCatching { playFocus.requestFocus() }; buttonsHadFocus = f.hasFocus }
                         .focusGroup(),   // so the row knows when focus is anywhere inside it, not only on its first button
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (t.kind == KIND_MOVIE) {
                             val p = progress["m:${t.key}"]?.takeIf { !it.finished && it.positionMs > 0 }
                             val left = p?.let { (it.durationMs - it.positionMs) / 60_000 }
-                            Pill(if (p != null) stringResource(R.string.continue_left, left!!.toInt()) else stringResource(R.string.play), { Playback.title(ctx, t.key) },
-                                Modifier.focusRequester(playFocus), primary = true, icon = Icons.Rounded.PlayArrow, height = 46.dp)
-                            if (p != null) Pill(stringResource(R.string.from_start), { Playback.title(ctx, t.key, restart = true) }, icon = Icons.Rounded.Replay, selected = true, height = 46.dp)
+                            MainButton(if (p != null) stringResource(R.string.continue_left, left!!.toInt()) else stringResource(R.string.play), { Playback.title(ctx, t.key) },
+                                Modifier.focusRequester(playFocus), icon = Icons.Rounded.PlayArrow)
+                            if (p != null) IconAction(Icons.Rounded.Replay, stringResource(R.string.from_start), { Playback.title(ctx, t.key, restart = true) })
                             c.catalog.versions(t).drop(1).forEach { v ->
-                                Pill(versionLabel(v.label), { Playback.title(ctx, t.key, streamId = v.streamId, container = v.container) }, selected = true, height = 46.dp)
+                                MainButton(versionLabel(v.label), { Playback.title(ctx, t.key, streamId = v.streamId, container = v.container) }, primary = false)
                             }
                         } else {
                             val r = resume
                             val label = when {
                                 // Nothing came back: the provider did not answer. Offer another try rather than claim there is nothing.
-                                r == null -> if (loading || episodes.isNotEmpty()) stringResource(R.string.loading) else stringResource(R.string.load_failed_retry)
+                                r == null -> if (loading || episodes.isNotEmpty()) stringResource(R.string.loading) else stringResource(R.string.play)
                                 r.second > 0 -> stringResource(R.string.continue_ep, r.first.season, r.first.number)
                                 progress.isNotEmpty() -> stringResource(R.string.next_ep, r.first.season, r.first.number)
                                 else -> stringResource(R.string.play_ep, r.first.season, r.first.number)
                             }
-                            Pill(label, { if (r != null) Playback.title(ctx, t.key, episodeId = r.first.id) else if (!loading) attempt++ }, Modifier.focusRequester(playFocus),
-                                primary = true, icon = Icons.Rounded.PlayArrow, height = 46.dp)
+                            MainButton(label, { if (r != null) Playback.title(ctx, t.key, episodeId = r.first.id) else if (!loading) attempt++ }, Modifier.focusRequester(playFocus),
+                                icon = Icons.Rounded.PlayArrow)
                         }
                         // Only when there is one: from the provider, or TMDB's official trailer.
                         trailer?.let { id ->
-                            Pill(stringResource(R.string.trailer), { Playback.trailer(ctx, id, t.name, t.dBackdrop ?: t.pBackdrop ?: t.poster) },
-                                icon = Icons.Rounded.Movie, selected = true, height = 46.dp)
+                            IconAction(Icons.Rounded.Movie, stringResource(R.string.trailer), { Playback.trailer(ctx, id, t.name, t.dBackdrop ?: t.pBackdrop ?: t.poster) })
                         }
-                        Pill(if (inList) stringResource(R.string.in_my_list) else stringResource(R.string.tab_my_list), { scope.launch { inList = c.library.toggleList(t.key) } },
-                            icon = if (inList) Icons.Rounded.Check else Icons.Rounded.Add, selected = true, height = 46.dp)
-                        Pill("", { scope.launch { liked = if (liked == true) null else true; c.library.rate(t.key, liked) } },
-                            icon = Icons.Rounded.ThumbUp, selected = true, primary = liked == true, height = 46.dp)
-                        Pill("", { scope.launch { liked = if (liked == false) null else false; c.library.rate(t.key, liked) } },
-                            icon = Icons.Rounded.ThumbDown, selected = true, primary = liked == false, height = 46.dp)
+                        IconAction(if (inList) Icons.Rounded.Check else Icons.Rounded.Add, if (inList) stringResource(R.string.in_my_list) else stringResource(R.string.tab_my_list), { scope.launch { inList = c.library.toggleList(t.key) } })
+                        IconAction(Icons.Rounded.ThumbUp, stringResource(R.string.like), { scope.launch { liked = if (liked == true) null else true; c.library.rate(t.key, liked) } }, active = liked == true)
+                        IconAction(Icons.Rounded.ThumbDown, stringResource(R.string.dislike), { scope.launch { liked = if (liked == false) null else false; c.library.rate(t.key, liked) } }, active = liked == false)
                     }
                 }
             }
@@ -238,11 +235,16 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
                                     progress = frac, label = listOfNotNull(duration(e.durationSecs).ifBlank { null }, if (p?.finished == true) stringResource(R.string.watched) else null).joinToString(" · ").ifBlank { null },
                                     wideImage = e.image ?: backdrop)
                                 WideCard(card, { Playback.title(ctx, t.key, episodeId = e.id) },
-                                    Modifier.railEdge(index, shown.size).then(if (e.id == current) Modifier.focusRequester(episodeFocus) else Modifier))
+                                    Modifier.railEdge(index, shown.size).then(if (e.id == current) Modifier.focusRequester(episodeFocus) else Modifier),
+                                    description = e.plot)
                             }
                         }
                     }
                 }
+            }
+            // The episodes did not come (the provider did not answer): say so in words; Play tries again.
+            if (t.kind != KIND_MOVIE && episodes.isEmpty() && !loading) item("failed") {
+                Text(stringResource(R.string.episodes_failed), style = MaterialTheme.typography.titleMedium, color = Ink.Soft, modifier = Modifier.padding(start = EDGE, top = 4.dp, bottom = 12.dp))
             }
             if (similar.size >= 5) item("similar") {
                 Box(Modifier.padding(top = 6.dp)) {

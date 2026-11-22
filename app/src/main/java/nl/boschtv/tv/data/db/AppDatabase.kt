@@ -25,8 +25,11 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         const val NAME = "boschtv2.db"
 
-        fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, NAME)
+        /** Each saved subscription has a catalog of its own, so switching between them needs no rebuilding. */
+        fun nameFor(subscription: Int) = if (subscription == 0) NAME else "boschtv2-$subscription.db"
+
+        fun create(context: Context, subscription: Int = 0): AppDatabase =
+            Room.databaseBuilder(context, AppDatabase::class.java, nameFor(subscription))
                 .addMigrations(object : androidx.room.migration.Migration(3, 4) {
                     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                         db.execSQL("CREATE TABLE IF NOT EXISTS `trending` (`listId` TEXT NOT NULL, `rank` INTEGER NOT NULL, `titleKey` TEXT NOT NULL, PRIMARY KEY(`listId`, `rank`))")

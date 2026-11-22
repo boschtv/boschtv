@@ -106,17 +106,21 @@ private fun Root(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit) {
     val source by c.prefs.source.collectAsState(initial = null)
     val src = source ?: return Box(Modifier.fillMaxSize().background(Ink.Bg))
     if (!src.isConfigured) { LoginScreen(); return }
+    val adding by c.adding.collectAsState()
+    if (adding) { LoginScreen(add = true); return }
+    // A subscription without a catalog yet (just added): show the catalog being built instead of empty pages.
+    val syncing by c.sync.state.collectAsState()
+    val version by c.sync.version.collectAsState()
+    var empty by remember { mutableStateOf(false) }
+    LaunchedEffect(version) { empty = c.catalog.isEmpty() }
+    (syncing as? nl.boschtv.tv.data.SyncState.Running)?.let { if (empty) { nl.boschtv.tv.ui.CatalogProgress(it); return } }
 
     val profiles by c.profiles.all.collectAsState()
     val active by c.profiles.active.collectAsState()
     val list = profiles
     val me = active ?: return Box(Modifier.fillMaxSize().background(Ink.Bg))
     if (list == null) return Box(Modifier.fillMaxSize().background(Ink.Bg))
-    // "Who's watching?" when the app opens and more than one person uses it. Decided once per opening, so
-    // adding a second profile later does not throw it up. A Google TV tile plays for whoever watched last.
-    val ask = remember { list.size > 1 && deepLink?.host != "play" }
-    var asked by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    if (ask && !asked) { nl.boschtv.tv.ui.ProfilesScreen(onClose = null) { asked = true }; return }
+    // The app opens for whoever watched last; someone else switches with the picture in the top bar.
     var switching by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         // Another profile: start fresh on its home page, with its own rows.
@@ -187,22 +191,27 @@ private fun Main(deepLink: android.net.Uri?, onDeepLinkHandled: () -> Unit, prof
         if (layers.isEmpty() && !covered) runCatching { content.requestFocus() }
     }
 
+    // Down in the rows of a home page the menu bar steps aside (see HomeScreen); any other page shows it.
+    var barHidden by remember { mutableStateOf(false) }
+    LaunchedEffect(tab) { barHidden = false }
     Box(Modifier.fillMaxSize().background(Ink.Bg)) {
         // The tab stays composed underneath so its scroll position and focus survive.
         val front = layers.isEmpty() && !picker && !updating && !covered
         Box(Modifier.fillMaxSize().gate(front)) {
             when (tab) {
-                Tab.HOME -> HomeScreen(null, scope, nav, content, active = front)
-                Tab.MOVIES -> HomeScreen(KIND_MOVIE, scope, nav, content, active = front)
-                Tab.SERIES -> HomeScreen(KIND_SERIES, scope, nav, content, active = front)
+                Tab.HOME -> HomeScreen(null, scope, nav, content, active = front, onDeep = { barHidden = it })
+                Tab.MOVIES -> HomeScreen(KIND_MOVIE, scope, nav, content, active = front, onDeep = { barHidden = it })
+                Tab.SERIES -> HomeScreen(KIND_SERIES, scope, nav, content, active = front, onDeep = { barHidden = it })
                 Tab.GENRES -> BrowseScreen(BrowseArgs(stringResource(R.string.tab_genres), TitleQuery(services = scope?.bit ?: 0L), filters = true), nav, content)
-                Tab.KIDS -> HomeScreen(null, scope, nav, content, kids = true, active = front)
+                Tab.KIDS -> HomeScreen(null, scope, nav, content, kids = true, active = front, onDeep = { barHidden = it })
                 Tab.MYLIST -> MyList(nav, content)
                 Tab.SEARCH -> SearchScreen(nav, content, scope)
                 Tab.SETTINGS -> SettingsScreen(content)
                 Tab.LIVE -> Unit
             }
-            TopBar(tab, scope, profile, enabled = front, updateWaiting = offered != null, onScope = { picker = true }, onProfile = onProfiles) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t }
+            androidx.compose.animation.AnimatedVisibility(!barHidden, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+                Box { TopBar(tab, scope, profile, enabled = front, updateWaiting = offered != null, onScope = { picker = true }, onProfile = onProfiles) { t -> if (t == Tab.LIVE) Playback.live(ctx) else tab = t } }
+            }
         }
         layers.forEachIndexed { i, layer ->
             val top = i == layers.lastIndex && !picker && !updating && !covered
