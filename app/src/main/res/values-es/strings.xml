@@ -125,6 +125,8 @@
     <string name="easier_phone">Más fácil: escanea con tu móvil</string>
     <string name="phone_paste">Pega allí el enlace de tu proveedor. Tu móvil debe estar en la misma red wifi.\n%1$s</string>
     <string name="play_failed">No se puede reproducir. Revisa tu conexión o prueba otra versión.</string>
+    <string name="lighter_copy">Versión más ligera</string>
+    <string name="slow_provider">Proveedor lento</string>
     <string name="episode_line">T%1$d · E%2$d · %3$s</string>
     <string name="track_n">Pista %1$d</string>
     <string name="back">Atrás</string>

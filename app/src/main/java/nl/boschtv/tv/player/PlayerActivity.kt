@@ -105,6 +105,8 @@ class VodUi {
     val scrubbing get() = scrubTo != null
     var touched by mutableLongStateOf(0L)
     var error by mutableStateOf<String?>(null)
+    /** A short line about what the player just did by itself; goes away again. */
+    var notice by mutableStateOf<String?>(null)
     var next by mutableStateOf<EpisodeEntity?>(null)
     var tracksOpen by mutableStateOf(false)
     var audio by mutableStateOf<List<TrackOption>>(emptyList())
@@ -160,6 +162,12 @@ sealed interface Floating {
 
 /** How long "Skip intro" / "Skip recap" stays up by itself before it steps out of the way. */
 const val SKIP_SHOWN_MS = 8_000L
+/** This many stops to load within [STALL_WINDOW_MS] and the file is arriving slower than it plays. */
+const val STALLS_TOO_MANY = 3
+const val STALL_WINDOW_MS = 120_000L
+const val STALL_TOO_LONG_MS = 20_000L
+/** How long the episodes of a season keep starting on the lighter copy before the best one is tried again. */
+const val LIGHTER_FOR_MS = 30 * 60_000L
 
 /** How long the credits countdown runs before the next episode starts. */
 const val AUTO_NEXT_MS = 10_000L
@@ -193,6 +201,22 @@ class PlayerActivity : ComponentActivity() {
     /** The viewer's languages for subtitles and sound, most wanted first: these head the track lists. */
     private var languages = listOf(Locale.getDefault().language, "en").distinct()
     private var skipSince = 0L
+    /** The picture has been running since the last start or skip: loading from here on is a stall. */
+    private var settled = false
+    /** When the picture stopped to load in the middle of playing, most recent last. */
+    private val stalls = ArrayDeque<Long>()
+    /** The provider's files for the current episode; asked for once it stalls. */
+    private var copies: List<nl.boschtv.tv.core.EpisodeCopy>? = null
+    /** The file in use when it is not the episode's own. */
+    private var copy: nl.boschtv.tv.core.EpisodeCopy? = null
+    private val triedCopies = HashSet<String>()
+    private var lighterJob: kotlinx.coroutines.Job? = null
+    private var longStall: kotlinx.coroutines.Job? = null
+    /** The file that was playing before the last switch, while the new one has yet to show a picture. */
+    private var previous: nl.boschtv.tv.core.EpisodeCopy? = null
+    private var unproven = false
+    private var noticeJob: kotlinx.coroutines.Job? = null
+    private var toldSlow = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,14 +229,34 @@ class PlayerActivity : ComponentActivity() {
             override fun onIsPlayingChanged(isPlaying: Boolean) { ui.playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) {
                 ui.buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_READY) { retries = 0; ui.error = null }
+                if (state == Player.STATE_BUFFERING && settled && player.playWhenReady) stalled()
+                if (state == Player.STATE_IDLE || state == Player.STATE_ENDED) settled = false
+                if (state == Player.STATE_READY) { settled = true; unproven = false; longStall?.cancel(); retries = 0; ui.error = null }
                 if (state == Player.STATE_ENDED) onEnded()
+            }
+            override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                // Loading after a skip is expected; only loading in the middle of playing counts as a stall.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) settled = false
             }
             override fun onTracksChanged(tracks: Tracks) = readTracks(tracks)
             override fun onRenderedFirstFrame() { awaitingFrame = false }
             override fun onPlayerError(error: PlaybackException) {
                 // Network hiccups are common on IPTV lines: retry from where we were a few times before giving up.
                 if (!onScreen || released) return
+                // A lighter copy that will not play at all (a kind of video this TV cannot show): back to
+                // the one before, and never offer it again for this episode.
+                val back = previous
+                val ep = episode
+                if (unproven && back != null && ep != null) {
+                    unproven = false; previous = null
+                    copy?.let { triedCopies += it.id }
+                    Playback.lighter.remove(seasonKey(ep))
+                    copy = back.takeIf { it.id != ep.id }
+                    ui.notice = null
+                    val at = player.currentPosition
+                    lifecycleScope.launch { start(c.prefs.source().episode(back.id, back.container), at) }
+                    return
+                }
                 if (retries++ < 3) {
                     val at = player.currentPosition
                     lifecycleScope.launch {
@@ -292,11 +336,72 @@ class PlayerActivity : ComponentActivity() {
         ui.subtitle = Texts.get(R.string.episode_line, ep.season, ep.number, ep.name)
         ui.next = c.library.nextEpisode(ep.titleKey, ep.id)
         ui.segments = null; ui.stayInCredits = false; segmentsFor = null
-        start(c.prefs.source().episode(ep.id, ep.container), positionMs)
+        lighterJob?.cancel(); longStall?.cancel(); copies = null; copy = null; triedCopies.clear(); stalls.clear(); toldSlow = false
+        previous = null; unproven = false
+        // The episode before this one arrived too slowly a moment ago: start on the listing that did work.
+        // After [LIGHTER_FOR_MS] the best copy gets another go, so one slow spell does not cost the evening.
+        Playback.lighter[seasonKey(ep)]?.takeIf { android.os.SystemClock.elapsedRealtime() < it.second }?.let { (listing, _) ->
+            copies = runCatching { c.catalog.episodeCopies(ep) }.getOrNull()
+            copy = copies?.firstOrNull { it.listing == listing && it.id != ep.id }
+            if (copy != null) { previous = nl.boschtv.tv.core.EpisodeCopy(0, ep.id, ep.container, 0); unproven = true }
+        }
+        start(c.prefs.source().episode(copy?.id ?: ep.id, copy?.let { it.container } ?: ep.container), positionMs)
+    }
+
+    private fun seasonKey(ep: EpisodeEntity) = "${ep.titleKey}:${ep.season}"
+
+    /**
+     * The picture stopped to load while it was playing. Once is a hiccup; [STALLS_TOO_MANY] times in
+     * [STALL_WINDOW_MS], or once for longer than [STALL_TOO_LONG_MS], means the file arrives slower than
+     * it plays, and no amount of waiting fixes that.
+     * The same episode from another of the provider's listings is usually lighter and on another server:
+     * carry on there, at the same spot.
+     */
+    private fun stalled() {
+        val ep = episode ?: return
+        val now = android.os.SystemClock.elapsedRealtime()
+        stalls.addLast(now)
+        while (stalls.first() < now - STALL_WINDOW_MS) stalls.removeFirst()
+        // One stop that does not end is the same trouble as several short ones.
+        longStall?.cancel()
+        longStall = lifecycleScope.launch {
+            delay(STALL_TOO_LONG_MS)
+            if (settled && player.playWhenReady && player.playbackState == Player.STATE_BUFFERING) lighter(ep)
+        }
+        if (stalls.size >= STALLS_TOO_MANY) lighter(ep)
+    }
+
+    private fun lighter(ep: EpisodeEntity) {
+        if (lighterJob?.isActive == true) return
+        stalls.clear()
+        lighterJob = lifecycleScope.launch {
+            val all = copies ?: runCatching { c.catalog.episodeCopies(ep) }.getOrDefault(emptyList()).also { copies = it }
+            if (released || !onScreen || episode?.id != ep.id) return@launch
+            val current = copy ?: all.firstOrNull { it.id == ep.id } ?: nl.boschtv.tv.core.EpisodeCopy(0, ep.id, ep.container, 0)
+            triedCopies += current.id
+            val next = nl.boschtv.tv.core.Copies.lighter(all, current, triedCopies)
+            if (next == null) {
+                if (!toldSlow) { toldSlow = true; notice(Texts.get(R.string.slow_provider)) }
+                return@launch
+            }
+            previous = current; unproven = true
+            copy = next
+            Playback.lighter[seasonKey(ep)] = next.listing to android.os.SystemClock.elapsedRealtime() + LIGHTER_FOR_MS
+            segmentsFor = null   // another release: its intro and credits sit elsewhere
+            val at = player.currentPosition
+            start(c.prefs.source().episode(next.id, next.container), at)
+            notice(Texts.get(R.string.lighter_copy))
+        }
+    }
+
+    private fun notice(text: String) {
+        ui.notice = text
+        noticeJob?.cancel()
+        noticeJob = lifecycleScope.launch { delay(8000); ui.notice = null }
     }
 
     private fun start(url: String, positionMs: Long) {
-        retries = 0; ui.error = null
+        retries = 0; ui.error = null; settled = false
         player.setMediaItem(Playback.item(url, ui.title, ui.subtitle), positionMs.coerceAtLeast(0))
         player.prepare()
         player.playWhenReady = true
@@ -552,6 +657,11 @@ private fun VodScreen(
             modifier = Modifier.fillMaxSize(),
         )
         if (ui.buffering && ui.error == null) Spinner(Modifier.align(Alignment.Center))
+        ui.notice?.let {
+            Text(it, style = MaterialTheme.typography.titleMedium, color = Ink.Text, maxLines = 1,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 48.dp)
+                    .background(Color(0xCC000000), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
+        }
 
         AnimatedVisibility(ui.visible || ui.error != null, enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color(0x99000000), 0.25f to Color.Transparent, 0.6f to Color.Transparent, 1f to Color(0xE6000000)))) {
