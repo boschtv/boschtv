@@ -22,6 +22,7 @@ import nl.boschtv.tv.data.Recommender
 import nl.boschtv.tv.data.SyncManager
 import nl.boschtv.tv.data.SyncWorker
 import nl.boschtv.tv.data.db.AppDatabase
+import nl.boschtv.tv.data.db.UserDatabase
 import nl.boschtv.tv.data.xtream.USER_AGENT
 import nl.boschtv.tv.data.xtream.XtreamClient
 import nl.boschtv.tv.system.WatchNext
@@ -32,7 +33,10 @@ import java.util.concurrent.TimeUnit
 class AppContainer(app: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val prefs = Prefs(app)
+    /** The catalog: replaceable. */
     val db = AppDatabase.create(app)
+    /** What the people on this TV made themselves: kept through updates, logging out and another provider. */
+    val user = UserDatabase.create(app)
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS)   // the full film list is tens of MB
@@ -40,8 +44,8 @@ class AppContainer(app: Application) {
         .build()
     val client = XtreamClient(http)
     val catalog = Catalog(db, client, prefs)
-    val profiles = nl.boschtv.tv.data.Profiles(db, prefs, scope)
-    val library = Library(db, catalog, profiles)
+    val profiles = nl.boschtv.tv.data.Profiles(user, prefs, scope)
+    val library = Library(user, db.channels(), catalog, profiles)
     val trends = nl.boschtv.tv.data.Trends(db, http, prefs, BuildConfig.TMDB_TOKEN)
     val recommender = Recommender(catalog, library, trends)
     val epg = Epg(db, client, prefs)
@@ -59,6 +63,19 @@ class AppContainer(app: Application) {
                 runCatching { watchNext.publish() }
             }
         }
+    }
+
+    /**
+     * Logging out ends the subscription on this TV, nothing else. The provider's catalog goes (another
+     * provider numbers its films, episodes and channels differently); profiles, history, My List, thumbs
+     * and favourite channels stay and line up again with the next catalog.
+     */
+    suspend fun logout() {
+        prefs.logout()
+        kotlinx.coroutines.withContext(Dispatchers.IO) { runCatching { db.clearAllTables() } }
+        catalog.invalidate()
+        sync.version.value++
+        runCatching { watchNext.publish() }
     }
 
     /** Refresh on launch when the catalog is older than a few hours; never blocks the UI. */

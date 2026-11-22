@@ -74,6 +74,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import nl.boschtv.tv.App
+import nl.boschtv.tv.data.db.ContentIds
 import nl.boschtv.tv.data.db.EpisodeEntity
 import nl.boschtv.tv.data.db.KIND_MOVIE
 import nl.boschtv.tv.data.db.TitleEntity
@@ -220,16 +221,18 @@ class PlayerActivity : ComponentActivity() {
         title = t
         val restart = intent.getBooleanExtra(Playback.RESTART, false)
         if (t.kind == KIND_MOVIE) {
-            val saved = c.library.progress("m:${t.key}")
-            streamId = intent.getLongExtra(Playback.STREAM, 0).takeIf { it != 0L } ?: saved?.streamId ?: t.sourceId
-            container = intent.getStringExtra(Playback.CONTAINER) ?: saved?.container?.takeIf { saved.streamId == streamId } ?: t.container
+            val saved = c.library.progress(ContentIds.movie(t.key))
+            // The version watched last time, as long as the provider still has it (another provider numbers them differently).
+            val savedStream = saved?.streamId?.takeIf { id -> c.catalog.versions(t).any { it.streamId == id } }
+            streamId = intent.getLongExtra(Playback.STREAM, 0).takeIf { it != 0L } ?: savedStream ?: t.sourceId
+            container = intent.getStringExtra(Playback.CONTAINER) ?: saved?.container?.takeIf { savedStream == streamId } ?: t.container
             ui.title = t.name; ui.subtitle = t.year?.toString()
             start(c.prefs.source().movie(streamId, container), if (restart || saved?.finished == true) 0 else saved?.positionMs ?: 0)
         } else {
             if (c.catalog.episodes(key).isEmpty()) c.catalog.detail(key, maxAgeMs = 0)
             val wanted = intent.getStringExtra(Playback.EPISODE)?.let { c.catalog.episode(it) }
             val (ep, pos) = if (wanted != null) {
-                val p = c.library.progress("e:${wanted.id}")
+                val p = c.library.progress(ContentIds.of(wanted))
                 wanted to if (restart || p?.finished == true) 0L else p?.positionMs ?: 0L
             } else c.library.resumePoint(key) ?: return finish()
             startEpisode(ep, if (restart) 0 else pos)

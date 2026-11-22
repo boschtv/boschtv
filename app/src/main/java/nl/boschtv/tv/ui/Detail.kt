@@ -208,7 +208,7 @@ fun DetailScreen(key: String, nav: Nav) {
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(shown.size, key = { shown[it].id }) { index ->
                                 val e = shown[index]
-                                val p = progress["e:${e.id}"]
+                                val p = progress[nl.boschtv.tv.data.db.ContentIds.of(e)]
                                 val frac = p?.let { if (it.finished) 1f else if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f }
                                 val card = Card(e.id, 1, "${e.number}. ${e.name}", null, null, e.image ?: backdrop, 0.0, 0, 0, 0, 0, 0, e.plot,
                                     progress = frac, label = listOfNotNull(duration(e.durationSecs).ifBlank { null }, if (p?.finished == true) stringResource(R.string.watched) else null).joinToString(" · ").ifBlank { null },

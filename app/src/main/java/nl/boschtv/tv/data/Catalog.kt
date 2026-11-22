@@ -222,9 +222,18 @@ class Catalog(
     /** Stream of what a profile was watching: the film version it chose, or the episode it is on. */
     suspend fun resumeUrl(p: nl.boschtv.tv.data.db.ProgressEntity): String? = withContext(Dispatchers.IO) {
         val src = prefs.source()
-        if (p.episodeId != null) return@withContext src.episode(p.episodeId, p.container)
+        // The history knows an episode by season and number; which video that is comes from the current catalog.
+        if (p.isEpisode) {
+            var eps = dao.episodes(p.titleKey)
+            // No episode list yet (fresh catalog, another provider): fetch it, as the preview of a new series does.
+            if (eps.isEmpty()) { dao.title(p.titleKey)?.let { t -> runCatching { fetchSeries(t) } }; eps = dao.episodes(p.titleKey) }
+            val e = eps.firstOrNull { it.season == p.season && it.number == p.number } ?: return@withContext null
+            return@withContext src.episode(e.id, e.container)
+        }
         val t = dao.title(p.titleKey) ?: return@withContext null
-        src.movie(p.streamId ?: t.sourceId, p.container ?: t.container)
+        // The chosen version only while this provider still has it; otherwise the title's own.
+        val chosen = p.streamId?.takeIf { id -> versions(t).any { it.streamId == id } }
+        if (chosen != null) src.movie(chosen, p.container ?: t.container) else src.movie(t.sourceId, t.container)
     }
 
     suspend fun episodes(key: String): List<EpisodeEntity> = withContext(Dispatchers.IO) { dao.episodes(key) }

@@ -30,6 +30,15 @@ class CoreTest {
         assertEquals("Little House on the Prairie (Het kleine huis op de prairie)", Titles.clean("┃NL┃ Little House on the Prairie (Het kleine huis op de prairie)").name)
     }
 
+    @Test fun acceptsOnlyRealTmdbIds() {
+        assertEquals("278", Titles.tmdbId("278"))
+        assertEquals("278", Titles.tmdbId(" 278 "))
+        assertEquals(null, Titles.tmdbId("tt0111161"))
+        assertEquals(null, Titles.tmdbId("0"))
+        assertEquals(null, Titles.tmdbId(""))
+        assertEquals(null, Titles.tmdbId(null))
+    }
+
     @Test fun cleansChannelsAndEpisodes() {
         assertEquals("NPO 1 HD", Titles.channel("┃NL┃ NPO 1 HD  ⏺ʳᵉᶜ"))
         assertTrue(Titles.isDivider("☰☰☰☰ ┃NL┃ JEUGD PAKKET HD ☰☰☰☰"))
