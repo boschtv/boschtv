@@ -129,15 +129,18 @@ class VodUi {
             s.intro?.let { if (position in it.first until it.last - 1500) return R.string.skip_intro to it.last }
             return null
         }
+    /** The intro or recap only just began: its button is up by itself for a few seconds ([SKIP_SHOWN_MS]). */
+    var skipFresh by mutableStateOf(false)
     /**
-     * The single button that floats over the picture (no control bar): skip the intro or recap, or go to
-     * the next episode during the credits. It has the focus, so OK presses it.
+     * The single button that floats over the picture: skip the intro or recap, or go to the next episode
+     * during the credits. It has the focus, so OK presses it. A skip button comes up by itself when its
+     * part begins and steps aside after a few seconds; any key brings it back, together with the controls,
+     * for as long as that part lasts.
      */
     val floating: Floating?
         get() {
-            skip?.let { return Floating.Skip(it.first, it.second) }
+            skip?.let { if (skipFresh || visible) return Floating.Skip(it.first, it.second) }
             if (nearEnd && !stayInCredits) return Floating.Next(nextIn)
-            return null
             return null
         }
     val creditsAt get() = segments?.creditsAt
@@ -153,6 +156,9 @@ sealed interface Floating {
     /** [inSeconds] null: no countdown yet (credits started), the button just offers the next episode. */
     data class Next(val inSeconds: Int?) : Floating
 }
+
+/** How long "Skip intro" / "Skip recap" stays up by itself before it steps out of the way. */
+const val SKIP_SHOWN_MS = 8_000L
 
 /** How long the credits countdown runs before the next episode starts. */
 const val AUTO_NEXT_MS = 10_000L
@@ -182,6 +188,8 @@ class PlayerActivity : ComponentActivity() {
     /** Episodes that started by themselves since the remote was last touched. */
     private var unattended = 0
     private var stillJob: kotlinx.coroutines.Job? = null
+    private var skipKind: Int? = null
+    private var skipSince = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -225,6 +233,11 @@ class PlayerActivity : ComponentActivity() {
                 if (ui.stillWatching) continue
                 ui.position = player.currentPosition.coerceAtLeast(0)
                 ui.duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+                // A skip button is "fresh" for a few seconds from the moment its intro or recap begins.
+                val kind = ui.skip?.first
+                val clock = System.currentTimeMillis()
+                if (kind != skipKind) { skipKind = kind; skipSince = clock }
+                ui.skipFresh = kind != null && clock - skipSince < SKIP_SHOWN_MS
                 // Credits reached and nobody pressed Back: on to the next episode after the countdown.
                 val at = ui.creditsAt
                 if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) autoNext()
@@ -426,6 +439,12 @@ class PlayerActivity : ComponentActivity() {
                 event.keyCode == KeyEvent.KEYCODE_BACK && floating is Floating.Next -> { ui.stayInCredits = true; return true }
             }
         }
+        // An intro or recap is playing but its button has stepped aside: the first OK, Up or Down only brings
+        // it back (with the controls), already selected, so a second OK skips.
+        if (floating == null && !wasVisible && !ui.scrubbing && ui.skip != null && event.keyCode in setOf(
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)) {
+            show(); return true
+        }
         if (ui.inCredits) ui.stayInCredits = true
         when (event.keyCode) {
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> { toggle(); return true }
@@ -501,6 +520,7 @@ private fun VodScreen(
     val nextFocus = remember { FocusRequester() }
     val seekFocus = remember { FocusRequester() }
     val moreFocus = remember { FocusRequester() }
+    val floatFocus = remember { FocusRequester() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply { useController = false; this.player = player; keepScreenOn = true; isFocusable = false }.also(onView) },
@@ -546,13 +566,18 @@ private fun VodScreen(
             }
         }
         // After skipping the time bar keeps the remote (left/right go on skipping); otherwise Play/Pause has it.
-        LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen, ui.seeking) {
-            if (ui.visible && !ui.scrubbing && !ui.tracksOpen && !ui.stillWatching) { delay(80); runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() } }
+        // While an intro or recap can be skipped, its button has it: that is what the key was for.
+        val skippable = ui.floating is Floating.Skip
+        LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen, ui.seeking, skippable) {
+            if (ui.visible && !ui.scrubbing && !ui.tracksOpen && !ui.stillWatching) {
+                delay(80)
+                if (skippable && !ui.seeking) { delay(60); runCatching { floatFocus.requestFocus() } }
+                else runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() }
+            }
         }
         // Skip intro / Skip recap / Next episode: one button over the picture, without the control bar.
         // While the bar is hidden it has the focus (white), so a single OK presses it.
         val floating = ui.floating
-        val floatFocus = remember { FocusRequester() }
         // What the button last said: it keeps saying that while it fades out, instead of emptying and shrinking.
         var lastFloating by remember { mutableStateOf(floating) }
         LaunchedEffect(floating) { if (floating != null) lastFloating = floating }
@@ -639,8 +664,8 @@ private fun TrackPanel(ui: VodUi, modifier: Modifier) {
 }
 
 /**
- * The one button that lies over the picture: "Skip intro", "Skip recap", "Next episode". Always the same
- * size, whatever it says. Dark glass with a thin outline while the control bar has the remote, white once
+ * The one button that lies over the picture: "Skip intro", "Skip recap", "Next episode". Small, and as
+ * wide as its words: it does not change while it is up. Dark glass with a thin outline while the control bar has the remote, white once
  * it has it itself. A countdown ([seconds] until the next episode starts) fills it from the left and
  * shows its number where the arrow otherwise is.
  */
@@ -653,7 +678,7 @@ private fun OverPicture(text: String, seconds: Int?, onClick: () -> Unit, modifi
         androidx.compose.animation.core.tween(1000, easing = androidx.compose.animation.core.LinearEasing), label = "countdown")
     androidx.tv.material3.Surface(
         onClick = onClick,
-        modifier = modifier.size(220.dp, 44.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.height(34.dp).onFocusChanged { focused = it.isFocused },
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
@@ -661,17 +686,21 @@ private fun OverPicture(text: String, seconds: Int?, onClick: () -> Unit, modifi
             contentColor = Ink.Text, focusedContentColor = Ink.Bg,
         ),
         border = androidx.tv.material3.ClickableSurfaceDefaults.border(
-            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.5.dp, Color(0x73FFFFFF)), shape = shape),
+            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, Color(0x73FFFFFF)), shape = shape),
             focusedBorder = androidx.tv.material3.Border.None,
         ),
     ) {
-        Box(Modifier.fillMaxSize()) {
-            if (seconds != null) Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(if (focused) Ink.Accent.copy(alpha = 0.28f) else Color(0x33FFFFFF)))
-            Row(Modifier.fillMaxSize().padding(start = 18.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (seconds != null) Text("$seconds", style = MaterialTheme.typography.titleLarge, maxLines = 1)
-                else androidx.tv.material3.Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(24.dp))
+        Box(Modifier.height(34.dp)) {
+            if (seconds != null) Box(Modifier.matchParentSize()) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(filled).background(if (focused) Ink.Accent.copy(alpha = 0.28f) else Color(0x33FFFFFF)))
+            }
+            Row(Modifier.height(34.dp).padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1)
+                // The same slot for the arrow and for the countdown's number, so the button never changes width.
+                Box(Modifier.padding(start = 8.dp).width(22.dp), contentAlignment = Alignment.Center) {
+                    if (seconds != null) Text("$seconds", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    else androidx.tv.material3.Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
             }
         }
     }
