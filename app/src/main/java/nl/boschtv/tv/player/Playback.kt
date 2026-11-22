@@ -26,8 +26,9 @@ object Playback {
     const val CHANNEL = "channel"
 
     /** Plays a YouTube trailer full screen inside the app (see [TrailerActivity]). */
-    fun trailer(ctx: Context, youtubeId: String) {
-        ctx.startActivity(Intent(ctx, TrailerActivity::class.java).putExtra(TrailerActivity.VIDEO, youtubeId))
+    fun trailer(ctx: Context, youtubeId: String, name: String? = null, image: String? = null) {
+        ctx.startActivity(Intent(ctx, TrailerActivity::class.java).putExtra(TrailerActivity.VIDEO, youtubeId)
+            .putExtra(TrailerActivity.NAME, name).putExtra(TrailerActivity.IMAGE, image))
     }
 
     fun title(ctx: Context, key: String, episodeId: String? = null, streamId: Long? = null, container: String? = null, restart: Boolean = false) {
