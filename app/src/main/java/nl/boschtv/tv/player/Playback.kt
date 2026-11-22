@@ -25,6 +25,13 @@ object Playback {
     const val RESTART = "restart"
     const val CHANNEL = "channel"
 
+    /**
+     * Seasons whose episodes arrived too slowly: the listing the player fell back on and until when
+     * ("title key:season" to series id and a moment on the device's running clock). The next episode
+     * starts there straight away; after that moment, or when the app closes, the best copy is tried again.
+     */
+    val lighter = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long>>()
+
     /** Plays a YouTube trailer full screen inside the app (see [TrailerActivity]). */
     fun trailer(ctx: Context, youtubeId: String, name: String? = null, image: String? = null) {
         ctx.startActivity(Intent(ctx, TrailerActivity::class.java).putExtra(TrailerActivity.VIDEO, youtubeId)

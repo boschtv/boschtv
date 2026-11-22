@@ -125,6 +125,8 @@
     <string name="easier_phone">Plus simple : scannez avec votre téléphone</string>
     <string name="phone_paste">Collez-y le lien de votre fournisseur. Votre téléphone doit être sur le même réseau Wi-Fi.\n%1$s</string>
     <string name="play_failed">Lecture impossible. Vérifiez votre connexion ou essayez une autre version.</string>
+    <string name="lighter_copy">Version plus légère</string>
+    <string name="slow_provider">Fournisseur lent</string>
     <string name="episode_line">S%1$d · E%2$d · %3$s</string>
     <string name="track_n">Piste %1$d</string>
     <string name="back">Retour</string>

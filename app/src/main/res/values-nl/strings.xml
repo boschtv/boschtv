@@ -125,6 +125,8 @@
     <string name="easier_phone">Makkelijker: scan met je telefoon</string>
     <string name="phone_paste">Plak daar de link van je aanbieder. Je telefoon moet op hetzelfde wifi-netwerk zitten.\n%1$s</string>
     <string name="play_failed">Afspelen lukt niet. Controleer je verbinding of probeer een andere versie.</string>
+    <string name="lighter_copy">Lichtere versie</string>
+    <string name="slow_provider">Aanbieder is traag</string>
     <string name="episode_line">S%1$d · A%2$d · %3$s</string>
     <string name="track_n">Spoor %1$d</string>
     <string name="back">Terug</string>

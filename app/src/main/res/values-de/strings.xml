@@ -125,6 +125,8 @@
     <string name="easier_phone">Einfacher: mit dem Handy scannen</string>
     <string name="phone_paste">Füge dort den Link deines Anbieters ein. Dein Handy muss im selben WLAN sein.\n%1$s</string>
     <string name="play_failed">Wiedergabe nicht möglich. Prüfe deine Verbindung oder probiere eine andere Fassung.</string>
+    <string name="lighter_copy">Leichtere Fassung</string>
+    <string name="slow_provider">Anbieter ist langsam</string>
     <string name="episode_line">S%1$d · F%2$d · %3$s</string>
     <string name="track_n">Spur %1$d</string>
     <string name="back">Zurück</string>

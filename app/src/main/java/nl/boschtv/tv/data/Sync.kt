@@ -51,9 +51,14 @@ private class Candidate(
     var poster: String?, var container: String?, var addedTs: Long, var rating: Double, var lang: Int,
     var genres: Long, var services: Long, var flags: Int, var topRank: Int,
     var dubbed: Boolean, var quality: String?, var plot: String?, var backdrop: String?,
+    /** Its category or its own name says which language it is for (a "MULTI" listing says nothing). */
+    var labelled: Boolean = true,
 ) {
     val alts = LinkedHashMap<String, String>()   // label -> "id;ext;label"
-    val score get() = lang * 100 + (if (dubbed) 10 else 0) + (if (quality != null) 1 else 0)
+    // Lowest wins. Among otherwise equal listings, the one made for the viewer's language goes before one
+    // that names no language: a "MULTI" copy carries every dub at once, which makes it several times
+    // heavier for the same picture, and its subtitles are a guess.
+    val score get() = lang * 100 + (if (dubbed) 10 else 0) + (if (quality != null) 4 else 0) + (if (labelled) 0 else 2)
     val altLabel get() = when { dubbed -> "dub"; else -> quality }
 }
 
@@ -174,11 +179,13 @@ class SyncManager(
             val catId = o.str("category_id") ?: return@forEach
             val cat = cats[catId] ?: return@forEach
             var catLang = cat.lang ?: return@forEach
+            var labelled = cat.labelled
             // The category says nothing about language: the title's own label decides ("NL: Dune", "DE: Dune").
             if (!cat.labelled) Tags.language(Tags.of(o.str("name").orEmpty()))?.let { l ->
                 val rel = content.relate(l)
                 if (!content.wants(rel, live = false)) return@forEach
                 catLang = rel
+                labelled = true
             }
             if (o.bool("is_adult")) return@forEach
             val id = (if (kind == KIND_MOVIE) o.long("stream_id") else o.long("series_id")) ?: return@forEach
@@ -210,6 +217,7 @@ class SyncManager(
                 services = cat.services, flags = cat.flags and Flags.TOP.inv(), topRank = topRank,
                 dubbed = clean.dubbed && kind == KIND_MOVIE, quality = clean.quality,
                 plot = o.str("plot")?.take(700), backdrop = o.firstString("backdrop_path"),
+                labelled = labelled,
             )
             val existing = out[key]
             if (existing == null) out[key] = cand else merge(existing, cand)
@@ -218,12 +226,18 @@ class SyncManager(
     }
 
     private val ENGLISH = "en"
+    private val MAX_COPIES = 4
 
     /** Same title seen again (other category, other language, other quality): keep the best, merge signals. */
     private fun merge(a: Candidate, b: Candidate) {
         val primaryLang = minOf(a.lang, b.lang)
         fun alt(c: Candidate) {
-            if (c.kind != KIND_MOVIE) return
+            if (c.kind != KIND_MOVIE) {
+                // Another listing of the same series has its own files, often on another server: the player
+                // falls back on those when an episode of the preferred listing arrives too slowly.
+                if (a.alts.size < MAX_COPIES) a.alts.getOrPut("$COPY${c.sourceId}") { "${c.sourceId};;$COPY" }
+                return
+            }
             if (c.lang > primaryLang) {
                 // The provider's Dutch copy can be dubbed with no other audio track (children's films),
                 // so the English copy stays available as a version. Its quality variants are dropped.
@@ -236,7 +250,7 @@ class SyncManager(
         if (b.score < a.score) {
             alt(a)
             a.sourceId = b.sourceId; a.container = b.container; a.name = b.name
-            a.lang = b.lang; a.dubbed = b.dubbed; a.quality = b.quality
+            a.lang = b.lang; a.dubbed = b.dubbed; a.quality = b.quality; a.labelled = b.labelled
             a.poster = b.poster ?: a.poster
         } else {
             alt(b)

@@ -7,6 +7,7 @@ import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import nl.boschtv.tv.core.EpisodeCopy
 import nl.boschtv.tv.core.Genre
 import nl.boschtv.tv.core.JsonObj
 import nl.boschtv.tv.core.Service
@@ -103,6 +104,9 @@ data class TitleQuery(
 
 data class Version(val streamId: Long, val container: String?, val label: String)
 
+/** Label of a series' other listings among a title's versions; these are never offered as a choice. */
+const val COPY = "copy"
+
 class Catalog(
     private val db: AppDatabase,
     private val client: XtreamClient,
@@ -140,11 +144,44 @@ class Catalog(
 
     fun versions(t: TitleEntity): List<Version> = buildList {
         add(Version(t.sourceId, t.container, if (t.lang == 0) "original" else "en"))
-        t.alts?.lines()?.forEach { line ->
-            val p = line.split(';')
-            val id = p.getOrNull(0)?.toLongOrNull() ?: return@forEach
-            add(Version(id, p.getOrNull(1)?.ifBlank { null }, p.getOrNull(2) ?: "other"))
+        alts(t).filter { it.label != COPY }.forEach(::add)
+    }
+
+    private fun alts(t: TitleEntity): List<Version> = t.alts?.lines().orEmpty().mapNotNull { line ->
+        val p = line.split(';')
+        val id = p.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+        Version(id, p.getOrNull(1)?.ifBlank { null }, p.getOrNull(2) ?: "other")
+    }
+
+    /**
+     * Every file the provider has for [ep]: the one from the series' own listing first, then the same
+     * episode in its other listings. One request per listing, so only asked when it is needed.
+     */
+    suspend fun episodeCopies(ep: EpisodeEntity): List<EpisodeCopy> = withContext(Dispatchers.IO) {
+        val t = dao.title(ep.titleKey) ?: return@withContext emptyList()
+        val src = prefs.source()
+        val listings = (listOf(t.sourceId) + alts(t).filter { it.label == COPY }.map { it.streamId }).distinct()
+        listings.mapNotNull { id ->
+            val root = runCatching { client.obj(src, "get_series_info", "series_id" to id.toString()) }.getOrNull() ?: return@mapNotNull null
+            copyIn(root, id, ep.season, ep.number)
         }
+    }
+
+    private fun copyIn(root: JsonObj, listing: Long, season: Int, number: Int): EpisodeCopy? {
+        var found: EpisodeCopy? = null
+        fun look(seasonHint: Int, list: Any?) {
+            (list as? List<*>)?.forEach { raw ->
+                val e = raw.asObj() ?: return@forEach
+                if (found != null || (e.int("season") ?: seasonHint) != season || e.int("episode_num") != number) return@forEach
+                val id = e.str("id") ?: return@forEach
+                found = EpisodeCopy(listing, id, e.str("container_extension"), e.obj("info")?.int("bitrate") ?: 0)
+            }
+        }
+        when (val eps = root.map["episodes"]) {
+            is Map<*, *> -> eps.forEach { (k, v) -> look((k as? String)?.toIntOrNull() ?: 1, v) }
+            is List<*> -> eps.forEachIndexed { i, v -> look(i + 1, v) }
+        }
+        return found
     }
 
     /* ---------- detail ---------- */

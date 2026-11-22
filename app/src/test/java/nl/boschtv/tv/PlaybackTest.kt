@@ -1,5 +1,7 @@
 package nl.boschtv.tv
 
+import nl.boschtv.tv.core.Copies
+import nl.boschtv.tv.core.EpisodeCopy
 import nl.boschtv.tv.core.FrameRateMeter
 import nl.boschtv.tv.core.FrameRates
 import nl.boschtv.tv.core.XmlTv
@@ -15,6 +17,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaybackTest {
+
+    /* ---------- a lighter copy when an episode arrives too slowly ---------- */
+
+    private val heavy = EpisodeCopy(1, "a", "mkv", 18_586)
+    private val medium = EpisodeCopy(2, "b", "mkv", 7_984)
+    private val light = EpisodeCopy(3, "c", "mkv", 1_948)
+
+    @Test fun stepsDownToTheBestCopyThatIsClearlyLighter() {
+        val all = listOf(heavy, light, medium)
+        assertEquals(medium, Copies.lighter(all, heavy, setOf("a")))
+        assertEquals(light, Copies.lighter(all, medium, setOf("a", "b")))
+        assertNull(Copies.lighter(all, light, setOf("a", "b", "c")))
+    }
+
+    @Test fun aCopyOfAboutTheSameWeightIsNoHelp() {
+        assertNull(Copies.lighter(listOf(heavy, heavy.copy(listing = 4, id = "d", kbps = 17_000)), heavy, setOf("a")))
+    }
+
+    @Test fun neverGoesBackToACopyThatAlreadyStalled() {
+        assertEquals(light, Copies.lighter(listOf(heavy, medium, light), heavy, setOf("a", "b")))
+    }
+
+    @Test fun triesACopyOfUnknownWeightOnlyWhenNothingElseIsLeft() {
+        val unknown = EpisodeCopy(5, "e", "mp4", 0)
+        assertEquals(medium, Copies.lighter(listOf(heavy, unknown, medium), heavy, setOf("a")))
+        assertEquals(unknown, Copies.lighter(listOf(heavy, unknown), heavy, setOf("a")))
+        // The episode's own weight is unknown: the lightest known copy is the safest guess.
+        assertEquals(light, Copies.lighter(listOf(unknown, medium, light), unknown, setOf("e")))
+    }
 
     /* ---------- frame rate ---------- */
 
