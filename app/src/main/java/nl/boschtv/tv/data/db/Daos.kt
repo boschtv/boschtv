@@ -17,6 +17,11 @@ data class EnrichTarget(val key: String, val sourceId: Long)
 @Dao
 interface CatalogDao {
     @Upsert(entity = TitleEntity::class) suspend fun upsertTitles(items: List<TitleCore>)
+    /** Of [keys], the stored titles whose provider entry is not the one in [now] ("key|sourceId"). */
+    @Query("SELECT `key` FROM titles WHERE `key` IN (:keys) AND `key` || '|' || sourceId NOT IN (:now)")
+    suspend fun movedTitles(keys: List<String>, now: List<String>): List<String>
+    @Query("DELETE FROM episodes WHERE titleKey IN (:keys)") suspend fun deleteEpisodesOf(keys: List<String>)
+    @Query("UPDATE titles SET detailAt = 0 WHERE `key` IN (:keys)") suspend fun expireDetail(keys: List<String>)
     @Query("DELETE FROM titles WHERE gen != :gen") suspend fun pruneTitles(gen: Long)
     @Query("UPDATE titles SET genres = pGenres | dGenres") suspend fun refreshGenres()
     @Query("SELECT COUNT(*) FROM titles") suspend fun titleCount(): Int

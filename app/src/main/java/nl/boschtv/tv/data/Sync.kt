@@ -262,7 +262,15 @@ class SyncManager(
                 alts = c.alts.values.takeIf { it.isNotEmpty() }?.joinToString("\n"),
                 pPlot = c.plot, pBackdrop = c.backdrop, gen = gen,
             )
-        }.chunked(400).forEach { chunk -> db.withTransaction { db.catalog().upsertTitles(chunk) } }
+        }.chunked(400).forEach { chunk ->
+            db.withTransaction {
+                // A title that now points at another entry of the provider (another language version, a
+                // re-upload): its stored episode list belongs to the old entry and must not be used again.
+                val moved = db.catalog().movedTitles(chunk.map { it.key }, chunk.map { "${it.key}|${it.sourceId}" })
+                db.catalog().upsertTitles(chunk)
+                if (moved.isNotEmpty()) { db.catalog().deleteEpisodesOf(moved); db.catalog().expireDetail(moved) }
+            }
+        }
     }
 
     /** @return the number of channels kept. */
