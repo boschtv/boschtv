@@ -210,8 +210,9 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
             if (episodes.isNotEmpty()) {
                 val seasons = episodes.map { it.season }.distinct().sorted()
                 item("seasons") {
-                    LazyRow(Modifier.padding(top = 4.dp), contentPadding = PaddingValues(horizontal = EDGE), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(seasons, key = { it }) { s -> Pill(stringResource(R.string.season_n, s), { season = s }, selected = s == season) }
+                    LazyRow(Modifier.padding(top = 4.dp), contentPadding = PaddingValues(horizontal = EDGE - 14.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // Tabs, as in the menu bar: a line under the season that is open, white only where the remote is.
+                        items(seasons, key = { it }) { s -> NavItem(stringResource(R.string.season_n, s), s == season) { season = s } }
                     }
                 }
                 item("episodes") {
