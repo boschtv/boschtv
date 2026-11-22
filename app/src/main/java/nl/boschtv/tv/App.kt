@@ -48,6 +48,7 @@ class AppContainer(app: Application) {
     val library = Library(user, db.channels(), catalog, profiles)
     val trends = nl.boschtv.tv.data.Trends(db, http, prefs, BuildConfig.TMDB_TOKEN)
     val recommender = Recommender(catalog, library, trends)
+    init { catalog.completeEpisodes = trends::completeEpisodes }
     val epg = Epg(db, client, prefs)
     val sync = SyncManager(db, client, prefs) { catalog.invalidate() }
     val enricher = Enricher(db, catalog)

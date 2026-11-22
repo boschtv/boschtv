@@ -105,6 +105,11 @@ object Titles {
         return t.ifBlank { fallback(number) }
     }
 
+    private val placeholderEpisode = Regex("""^(?:episode|episodio|episodi|aflevering|afl|folge|capitulo|chapter|part|deel|ep|e)?\s*\d+$""")
+
+    /** "Episodio 3", "Aflevering 3", "E03", "3": a name that says no more than the episode's number. */
+    fun isPlaceholderEpisodeName(name: String): Boolean = fold(name).let { it.isBlank() || placeholderEpisode.matches(it) }
+
     /** Lower-case, accent-free, alphanumeric form used for search and de-duplication. */
     fun fold(s: String): String {
         val n = marks.replace(Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD), "")
