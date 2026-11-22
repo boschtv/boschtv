@@ -117,12 +117,29 @@ class VodUi {
             s.intro?.let { if (position in it.first until it.last - 1500) return R.string.skip_intro to it.last }
             return null
         }
+    /**
+     * The single button that floats over the picture (no control bar): skip the intro or recap, or go to
+     * the next episode during the credits. It has the focus, so OK presses it.
+     */
+    val floating: Floating?
+        get() {
+            skip?.let { return Floating.Skip(it.first, it.second) }
+            if (nearEnd && !stayInCredits) return Floating.Next(nextIn)
+            return null
+            return null
+        }
     val creditsAt get() = segments?.creditsAt
     val inCredits get() = next != null && creditsAt?.let { position >= it } == true
     val nearEnd get() = next != null && duration > 0 && (inCredits || duration - position < AUTO_NEXT_MS)
     /** Seconds until the next episode starts by itself. */
     val nextIn: Int get() = if (inCredits && !stayInCredits) ((AUTO_NEXT_MS - (position - creditsAt!!)) / 1000).toInt().coerceAtLeast(0)
         else ((duration - position) / 1000).toInt().coerceAtLeast(0)
+}
+
+sealed interface Floating {
+    data class Skip(val label: Int, val to: Long) : Floating
+    /** [inSeconds] null: no countdown yet (credits started), the button just offers the next episode. */
+    data class Next(val inSeconds: Int?) : Floating
 }
 
 /** How long the credits countdown runs before the next episode starts. */
@@ -182,15 +199,15 @@ class PlayerActivity : ComponentActivity() {
                 if (released || !onScreen) continue
                 ui.position = player.currentPosition.coerceAtLeast(0)
                 ui.duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+                // Credits reached and nobody pressed Back: on to the next episode after the countdown.
+                val at = ui.creditsAt
+                if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) playNext()
                 // Skip times need the file's length to pick the right release: ask once it is known.
                 val ep = episode
                 if (ep != null && ui.duration > 0 && segmentsFor != ep.id) {
                     segmentsFor = ep.id
                     launch { ui.segments = c.skips.forEpisode(ep.titleKey, ep.season, ep.number, ui.duration) }
                 }
-                // Credits reached and nobody pressed a key: on to the next episode.
-                val at = ui.creditsAt
-                if (ui.inCredits && !ui.stayInCredits && at != null && ui.position - at >= AUTO_NEXT_MS) playNext()
                 if (ui.visible && !ui.tracksOpen && ui.playing && !ui.scrubbing && System.currentTimeMillis() - ui.touched > 4500) { ui.visible = false; ui.seeking = false }
                 if (++tick % 20 == 0 && ui.playing) save()
             }
@@ -341,13 +358,18 @@ class PlayerActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         val wasVisible = ui.visible
+        val floating = ui.floating   // as it was before this key
         ui.touched = System.currentTimeMillis()
-        if (ui.inCredits) ui.stayInCredits = true
-        // While an intro or recap plays and the controls are hidden, OK skips it.
-        val skip = ui.skip
-        if (skip != null && !wasVisible && !ui.scrubbing && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
-            player.seekTo(skip.second); ui.position = skip.second; return true
+        // The floating button: OK presses it; Back during the credits keeps you in the credits.
+        if (floating != null && !wasVisible && !ui.scrubbing) {
+            val ok = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
+            when {
+                ok && floating is Floating.Skip -> { player.seekTo(floating.to); ui.position = floating.to; return true }
+                ok && floating is Floating.Next -> { playNext(); return true }
+                event.keyCode == KeyEvent.KEYCODE_BACK && floating is Floating.Next -> { ui.stayInCredits = true; return true }
+            }
         }
+        if (ui.inCredits) ui.stayInCredits = true
         when (event.keyCode) {
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> { toggle(); return true }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { scrub(true, event.repeatCount); return true }
@@ -453,14 +475,27 @@ private fun VodScreen(
         LaunchedEffect(ui.visible, ui.scrubbing, ui.tracksOpen, ui.seeking) {
             if (ui.visible && !ui.scrubbing && !ui.tracksOpen) { delay(80); runCatching { (if (ui.seeking) seekFocus else playFocus).requestFocus() } }
         }
-        // Nudge towards the next episode during the credits.
-        LaunchedEffect(ui.nearEnd) { if (ui.nearEnd) { ui.visible = true; ui.touched = System.currentTimeMillis(); delay(150); runCatching { nextFocus.requestFocus() } } }
-
-        // "Skip intro" / "Skip recap": also while the controls are hidden; OK presses it.
-        val skip = ui.skip
-        AnimatedVisibility(skip != null && !ui.scrubbing && !ui.tracksOpen, enter = fadeIn(), exit = fadeOut(),
+        // Skip intro / Skip recap / Next episode: one button over the picture, without the control bar.
+        // While the bar is hidden it has the focus (white), so a single OK presses it.
+        val floating = ui.floating
+        val floatFocus = remember { FocusRequester() }
+        AnimatedVisibility(floating != null && !ui.scrubbing && !ui.tracksOpen, enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = if (ui.visible) 150.dp else 48.dp)) {
-            if (skip != null) Pill(stringResource(skip.first), { player.seekTo(skip.second); ui.position = skip.second }, primary = true, icon = Icons.Rounded.SkipNext, height = 48.dp)
+            val label = when (floating) {
+                is Floating.Skip -> stringResource(floating.label)
+                is Floating.Next -> floating.inSeconds?.let { stringResource(R.string.next_ep_in, it) } ?: stringResource(R.string.next_episode)
+                null -> ""
+            }
+            Pill(label, {
+                when (floating) {
+                    is Floating.Skip -> { player.seekTo(floating.to); ui.position = floating.to }
+                    is Floating.Next -> onNext()
+                    null -> Unit
+                }
+            }, Modifier.focusRequester(floatFocus), primary = true, icon = Icons.Rounded.SkipNext, height = 52.dp)
+        }
+        LaunchedEffect(floating?.javaClass, ui.visible) {
+            if (floating != null && !ui.visible) { delay(120); runCatching { floatFocus.requestFocus() } }
         }
 
         if (ui.tracksOpen) TrackPanel(ui, Modifier.align(Alignment.CenterEnd))

@@ -47,7 +47,7 @@ New versions are offered by the app itself (Settings → Check for updates).
   timeline guide (press ▶), and watching a programme from its beginning where the provider allows it.
 - **Search** with an on-screen keyboard or your voice.
 - **Private.** Your history, list and progress stay on the TV. The app talks only to your provider,
-  to TMDB (posters, trending lists), to TheIntroDB (skip times) and to GitHub (update check).
+  to TMDB (posters, trending lists), to TheIntroDB and IntroDB (skip times) and to GitHub (update check).
 
 The app's own texts are Dutch for now; see the roadmap.
 

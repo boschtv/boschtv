@@ -44,7 +44,7 @@ class AppContainer(app: Application) {
     val enricher = Enricher(db, catalog)
     val watchNext = WatchNext(app, catalog, library)
     val updater = nl.boschtv.tv.system.Updater(app, http)
-    val skips = nl.boschtv.tv.data.SkipTimes(http)
+    val skips = nl.boschtv.tv.data.SkipTimes(http, BuildConfig.TMDB_TOKEN)
 
     /** Refresh on launch when the catalog is older than a few hours; never blocks the UI. */
     fun refreshIfStale(force: Boolean = false) = scope.launch {
