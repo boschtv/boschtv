@@ -273,8 +273,15 @@ fun CardRow(
         Box(Modifier.height(ROW_TITLE_H.dp).padding(start = EDGE), contentAlignment = Alignment.CenterStart) {
             Text(row.title, style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1)
         }
+        // Rows longer than the screen go round: past the last card comes the first again. Short rows keep
+        // their ends, so a card never shows twice at once.
+        val loops = row.style != RowStyle.SERVICES && row.cards.size >= if (row.style == RowStyle.WIDE) 5 else 8
+        val cycle = row.cards.size + if (onMore != null && row.cards.size >= 12) 1 else 0
+        val start = cycle * (LOOP_ROUNDS / 2)
         WithPivot(EDGE) {
+            androidx.compose.runtime.key(loops, cycle) {
             LazyRow(
+                state = androidx.compose.foundation.lazy.rememberLazyListState(if (loops) start else 0),
                 contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 12.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -287,31 +294,48 @@ fun CardRow(
                                 .railEdge(i, row.services.size))
                     }
                 } else {
-                    itemsIndexed(row.cards, key = { _, c -> c.key }, contentType = { _, _ -> row.style }) { i, c ->
-                        val more = onMore != null && row.cards.size >= 12
+                    val more = onMore != null && row.cards.size >= 12
+                    val n = row.cards.size + if (more) 1 else 0
+                    @Composable
+                    fun Slot(i: Int, m: Modifier) {
+                        if (i == row.cards.size) {
+                            Tile(onMore ?: {}, m.size(POSTER_W, POSTER_H), onFocus = { onFocus(null) }) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(stringResource(R.string.see_all), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                }
+                            }
+                            return
+                        }
+                        val c = row.cards[i]
                         val id = "${row.id}/${c.key}"
-                        val m = (if (i == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
-                            .then(if (restore != null && id == restoreId) Modifier.focusRequester(restore) else Modifier)
-                            .railEdge(i, row.cards.size + if (more) 1 else 0)
+                        val mm = m.then(if (restore != null && id == restoreId) Modifier.focusRequester(restore) else Modifier)
                         val focused = { onFocus(c); onFocusId?.invoke(id); Unit }
                         when (row.style) {
-                            RowStyle.WIDE -> WideCard(c, { onClick(c) }, m, onFocus = focused, onLongClick = onLongClick?.let { { it(c) } })
-                            RowStyle.TOP -> PosterCard(c, { onClick(c) }, m, onFocus = focused, rank = i + 1)
-                            else -> PosterCard(c, { onClick(c) }, m, onFocus = focused, badge = showNew)
+                            RowStyle.WIDE -> WideCard(c, { onClick(c) }, mm, onFocus = focused, onLongClick = onLongClick?.let { { it(c) } })
+                            RowStyle.TOP -> PosterCard(c, { onClick(c) }, mm, onFocus = focused, rank = i + 1)
+                            else -> PosterCard(c, { onClick(c) }, mm, onFocus = focused, badge = showNew)
                         }
                     }
-                    if (onMore != null && row.cards.size >= 12) item(key = "more", contentType = "more") {
-                        Tile(onMore, Modifier.size(POSTER_W, POSTER_H).focusProperties { right = FocusRequester.Cancel }, onFocus = { onFocus(null) }) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.see_all), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                            }
+                    if (loops) {
+                        // Endless: the cards repeat, and the row starts in the middle on the first card.
+                        items(n * LOOP_ROUNDS, key = { idx -> (if (idx % n == row.cards.size) "more" else row.cards[idx % n].key) + "#" + idx / n },
+                            contentType = { idx -> if (idx % n == row.cards.size) "more" else row.style }) { idx ->
+                            Slot(idx % n, if (idx == start && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                        }
+                    } else {
+                        items(n, key = { i -> if (i == row.cards.size) "more" else row.cards[i].key }, contentType = { i -> if (i == row.cards.size) "more" else row.style }) { i ->
+                            Slot(i, (if (i == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier).railEdge(i, n))
                         }
                     }
                 }
             }
+            }
         }
     }
 }
+
+/** How many times an endless row repeats its cards: far more than anyone scrolls in one go. */
+private const val LOOP_ROUNDS = 2000
 
 /** First and last tile of a rail: left/right stays put instead of jumping to whatever else is on screen. */
 fun Modifier.railEdge(index: Int, count: Int): Modifier = if (index != 0 && index != count - 1) this else focusProperties {
