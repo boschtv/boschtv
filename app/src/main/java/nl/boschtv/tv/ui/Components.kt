@@ -273,15 +273,17 @@ fun CardRow(
         Box(Modifier.height(ROW_TITLE_H.dp).padding(start = EDGE), contentAlignment = Alignment.CenterStart) {
             Text(row.title, style = MaterialTheme.typography.titleLarge, color = Ink.Text, maxLines = 1)
         }
-        // Rows longer than the screen go round: past the last card comes the first again. Short rows keep
-        // their ends, so a card never shows twice at once.
-        val loops = row.style != RowStyle.SERVICES && row.cards.size >= if (row.style == RowStyle.WIDE) 5 else 8
+        // Rows longer than the screen go round one way, as on Netflix: they start on the first card with
+        // nothing to its left, and past the last card comes the first again; once round, left goes back
+        // across that seam. Ranked rows (Top 10, Popular) keep their ends, and so do short rows, so a card
+        // never shows twice at once.
+        val loops = row.style != RowStyle.SERVICES && row.style != RowStyle.TOP &&
+            row.cards.size >= if (row.style == RowStyle.WIDE) 5 else 8
         val cycle = row.cards.size + if (onMore != null && row.cards.size >= 12) 1 else 0
-        val start = cycle * (LOOP_ROUNDS / 2)
         WithPivot(EDGE) {
             androidx.compose.runtime.key(loops, cycle) {
             LazyRow(
-                state = androidx.compose.foundation.lazy.rememberLazyListState(if (loops) start else 0),
+                state = androidx.compose.foundation.lazy.rememberLazyListState(),
                 contentPadding = PaddingValues(start = EDGE, end = EDGE, top = 12.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -317,10 +319,11 @@ fun CardRow(
                         }
                     }
                     if (loops) {
-                        // Endless: the cards repeat, and the row starts in the middle on the first card.
+                        // Endless to the right: the cards repeat; the very first card is the row's only end.
                         items(n * LOOP_ROUNDS, key = { idx -> (if (idx % n == row.cards.size) "more" else row.cards[idx % n].key) + "#" + idx / n },
                             contentType = { idx -> if (idx % n == row.cards.size) "more" else row.style }) { idx ->
-                            Slot(idx % n, if (idx == start && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                            Slot(idx % n, (if (idx == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                                .then(if (idx == 0) Modifier.railEdge(0, 2) else Modifier))
                         }
                     } else {
                         items(n, key = { i -> if (i == row.cards.size) "more" else row.cards[i].key }, contentType = { i -> if (i == row.cards.size) "more" else row.style }) { i ->
@@ -334,7 +337,7 @@ fun CardRow(
     }
 }
 
-/** How many times an endless row repeats its cards: far more than anyone scrolls in one go. */
+/** How many times an endless row repeats its cards: far more than anyone scrolls right in one go. */
 private const val LOOP_ROUNDS = 2000
 
 /** First and last tile of a rail: left/right stays put instead of jumping to whatever else is on screen. */
