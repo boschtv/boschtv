@@ -29,6 +29,7 @@ class Prefs(private val context: Context) {
         val BELGIAN = booleanPreferencesKey("belgian")
         val ENGLISH_LIVE = booleanPreferencesKey("english_live")
         val LAST_SYNC = longPreferencesKey("last_sync")
+        val SYNCED_BY = longPreferencesKey("synced_by")
         val LAST_TRENDS = longPreferencesKey("last_trends")
         val LAST_GUIDE = longPreferencesKey("last_guide")
         val LAST_CHANNEL = longPreferencesKey("last_channel")
@@ -50,7 +51,7 @@ class Prefs(private val context: Context) {
         val SUBS = stringPreferencesKey("subscriptions")
         val ACTIVE_SUB = longPreferencesKey("active_subscription")
         /** Everything learned about one provider: forgotten when another subscription takes over. */
-        val LEARNED get() = listOf(EXPIRES, MAX_CONN, TRIAL, PROBLEM, SERVER_ZONE, LIVE_EXT, LAST_SYNC, LAST_TRENDS, LAST_GUIDE, SYNC_REPORT, LAST_CHANNEL, LAST_GROUP)
+        val LEARNED get() = listOf(EXPIRES, MAX_CONN, TRIAL, PROBLEM, SERVER_ZONE, LIVE_EXT, LAST_SYNC, SYNCED_BY, LAST_TRENDS, LAST_GUIDE, SYNC_REPORT, LAST_CHANNEL, LAST_GROUP)
     }
 
     /** The profile that is watching; null before one was ever chosen. */
@@ -139,6 +140,8 @@ class Prefs(private val context: Context) {
     suspend fun source(): Source = source.first()
     suspend fun content(): ContentPrefs = content.first()
     suspend fun lastSync(): Long = lastSync.first()
+    /** The app version that made the stored catalog; another version may read the provider's names differently. */
+    suspend fun syncedBy(): Long = context.store.data.first()[K.SYNCED_BY] ?: 0L
 
     suspend fun saveSource(s: Source) = context.store.edit {
         // First login on this TV: start from the TV's own language (changeable in Settings).
@@ -173,7 +176,10 @@ class Prefs(private val context: Context) {
     suspend fun lastGuide(): Long = context.store.data.first()[K.LAST_GUIDE] ?: 0L
     suspend fun markGuide() = context.store.edit { it[K.LAST_GUIDE] = System.currentTimeMillis() }
 
-    suspend fun markSynced() = context.store.edit { it[K.LAST_SYNC] = System.currentTimeMillis() }
+    suspend fun markSynced() = context.store.edit {
+        it[K.LAST_SYNC] = System.currentTimeMillis()
+        it[K.SYNCED_BY] = nl.boschtv.tv.BuildConfig.VERSION_CODE.toLong()
+    }
 
     suspend fun liveExt(): String = context.store.data.first()[K.LIVE_EXT] ?: "m3u8"
     suspend fun lastChannel(): Pair<Long?, String?> = context.store.data.first().let { it[K.LAST_CHANNEL] to it[K.LAST_GROUP] }

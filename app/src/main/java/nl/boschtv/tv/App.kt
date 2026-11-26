@@ -129,7 +129,8 @@ class AppContainer(private val app: Application) {
         launch { runCatching { trends.loadLogos() } }
         val src = prefs.source()
         if (!src.isConfigured) return@launch
-        val stale = System.currentTimeMillis() - prefs.lastSync() > 6 * 3600_000L
+        // An update can read the provider's names differently (labels, languages): the catalog is redone with it.
+        val stale = System.currentTimeMillis() - prefs.lastSync() > 6 * 3600_000L || prefs.syncedBy() != BuildConfig.VERSION_CODE.toLong()
         // More than one generation means an update was cut off halfway: finish the job.
         val halfDone = runCatching { db.catalog().generations() > 1 }.getOrDefault(false)
         if (force || stale || halfDone || catalog.isEmpty()) {
