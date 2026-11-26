@@ -7,6 +7,9 @@ import nl.boschtv.tv.data.db.FavoriteEntity
 import nl.boschtv.tv.core.Titles
 import nl.boschtv.tv.data.keepsSeen
 import nl.boschtv.tv.data.listingScore
+import nl.boschtv.tv.data.Listing
+import nl.boschtv.tv.data.seriesAlts
+import nl.boschtv.tv.core.Lang
 import nl.boschtv.tv.data.matchFavorites
 import nl.boschtv.tv.data.resumeEpisode
 import org.junit.Assert.assertFalse
@@ -41,6 +44,25 @@ class UserDataTest {
         assertTrue("a Dutch 4K listing beats a MULTI one", nl4k < multi)
         assertTrue(multi < en)
         assertTrue(listingScore(0, true, true, "4K") < multi)
+    }
+
+    /** A sharper listing is a choice only in exactly the same language; everything else stays a fallback copy. */
+    @Test fun sharperSeriesListingInTheSameLanguageIsAChoice() {
+        val nl = Listing(1, Lang.HOME, true, null)
+        val nl4k = Listing(2, Lang.HOME, true, "4K")
+        val multi4k = Listing(3, Lang.HOME, false, "4K")
+        val en4k = Listing(4, Lang.EN, true, "4K")
+        val be4k = Listing(5, Lang.REGIONAL, true, "4K")
+        val nlHevc = Listing(6, Lang.HOME, true, "HEVC")
+        assertEquals(listOf("2;;4K", "3;;copy", "4;;copy", "5;;copy"), seriesAlts(nl, listOf(nl4k, multi4k, en4k, be4k), 4))
+        assertEquals(listOf("6;;copy"), seriesAlts(nl, listOf(nlHevc), 4))   // HEVC is lighter, not sharper
+        assertEquals(listOf("2;;4K", "7;;Dolby Vision").sorted(), seriesAlts(nl, listOf(nl4k, Listing(7, Lang.HOME, true, "Dolby Vision")), 4).sorted())
+        // Playing a MULTI listing (no Dutch one): no choice can be said to be the same language.
+        assertEquals(listOf("2;;copy"), seriesAlts(multi4k.copy(id = 9, quality = null), listOf(nl4k.copy(labelled = false)), 4))
+        // The one that plays is already 4K: nothing to step up to.
+        assertEquals(listOf("1;;copy"), seriesAlts(nl4k, listOf(nl), 4))
+        // A choice always fits, the copies fill up what is left.
+        assertEquals(4, seriesAlts(nl, listOf(nl4k) + (10L..20L).map { Listing(it, Lang.EN, true, null) }, 4).size)
     }
 
     @Test fun sameEpisodeOnAnotherProviderHasTheSameId() {

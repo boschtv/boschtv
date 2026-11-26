@@ -127,6 +127,7 @@
     <string name="phone_paste">Paste your provider\'s link there. Your phone must be on the same Wi-Fi network.\n%1$s</string>
     <string name="play_failed">Can\'t play this. Check your connection or try another version.</string>
     <string name="lighter_copy">Lighter version</string>
+    <string name="choice_missing">This episode is not there in that quality: playing the regular one</string>
     <string name="slow_provider">Provider is slow</string>
     <string name="episode_line">S%1$d · E%2$d · %3$s</string>
     <string name="track_n">Track %1$d</string>

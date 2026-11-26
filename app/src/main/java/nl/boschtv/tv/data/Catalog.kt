@@ -104,7 +104,10 @@ data class TitleQuery(
 
 data class Version(val streamId: Long, val container: String?, val label: String)
 
-/** Label of a series' other listings among a title's versions; these are never offered as a choice. */
+/**
+ * Label of a series' other listings among a title's versions; these are never offered as a choice. A series'
+ * listing labelled with a quality ("4K") is: the same language, sharper, chosen with its own button.
+ */
 const val COPY = "copy"
 
 class Catalog(
@@ -160,7 +163,7 @@ class Catalog(
     suspend fun episodeCopies(ep: EpisodeEntity): List<EpisodeCopy> = withContext(Dispatchers.IO) {
         val t = dao.title(ep.titleKey) ?: return@withContext emptyList()
         val src = prefs.source()
-        val listings = (listOf(t.sourceId) + alts(t).filter { it.label == COPY }.map { it.streamId }).distinct()
+        val listings = (listOf(t.sourceId) + alts(t).map { it.streamId }).distinct()
         listings.mapNotNull { id ->
             val root = runCatching { client.obj(src, "get_series_info", "series_id" to id.toString()) }.getOrNull() ?: return@mapNotNull null
             copyIn(root, id, ep.season, ep.number)

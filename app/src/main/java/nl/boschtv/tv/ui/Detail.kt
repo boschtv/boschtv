@@ -187,6 +187,10 @@ fun DetailScreen(key: String, nav: Nav, atEpisode: Boolean = false) {
                             }
                             MainButton(label, { if (r != null) Playback.title(ctx, t.key, episodeId = r.first.id) else if (!loading) attempt++ }, Modifier.focusRequester(playFocus),
                                 icon = Icons.Rounded.PlayArrow)
+                            // A sharper listing in the same language ("4K"): the same episode from there. Play above stays the regular one.
+                            if (r != null) c.catalog.versions(t).drop(1).forEach { v ->
+                                MainButton(versionLabel(v.label), { Playback.title(ctx, t.key, episodeId = r.first.id, listing = v.streamId) }, primary = false)
+                            }
                         }
                         // Only when there is one: from the provider, or TMDB's official trailer.
                         trailer?.let { id ->
