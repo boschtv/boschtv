@@ -114,7 +114,10 @@ How languages are decided, so you know what to change:
   unlabelled categories count as the home language (films, series) or are left out (live TV). If it
   hardly labels anything, everything is kept.
 - **A category's label wins**, unless its name mentions another language: `┃NL┃ TURKS` is Turkish.
-- **When a category has no label, each title's own label decides** (`NL: Dune`, `DE: Dune`).
+- **When a category has no label, each title's own label decides** (`NL: Dune`, `DE: Dune`, and bare
+  as `NL Dune` / `DE Dune` when the rest of the name has small letters, so `DE KAMPIOENEN` stays a title).
+- **`MULTI` is a label without a language**: stripped from the name, and such a listing only plays when
+  the title has no listing in the home language, whatever the quality of either.
 - **What stays:** the viewer's home language, English (switchable) and, for Dutch viewers, Flemish
   (switchable). The rest is left out.
 

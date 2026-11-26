@@ -82,9 +82,13 @@ class Library(private val user: UserDatabase, private val channels: ChannelDao, 
 
     private suspend fun save(p: ProgressEntity, episode: EpisodeEntity? = null) = withContext(Dispatchers.IO) {
         val dur = p.durationMs.coerceAtLeast(0)
+        val before = dao.progress(p.profileId, p.contentId)
         // Under a minute in: not worth a "Continue watching" tile yet.
-        if (p.positionMs < 60_000 && dao.progress(p.profileId, p.contentId) == null) return@withContext
+        if (p.positionMs < 60_000 && before == null) return@withContext
         val finished = dur > 0 && (p.positionMs >= dur * 0.93 || dur - p.positionMs < 120_000 && dur > 600_000)
+        // Watching something again that was already seen keeps it seen: the checkmark stays, it does not
+        // come back in "Continue watching", and where the series goes on next is still decided by it.
+        if (keepsSeen(before?.finished, finished)) return@withContext
         dao.saveProgress(p.copy(durationMs = dur, finished = finished, updatedAt = System.currentTimeMillis()))
         if (finished && episode != null) queueNext(p.profileId, episode)
         changed()
@@ -281,3 +285,6 @@ internal fun resumeEpisode(eps: List<EpisodeEntity>, season: Int?, number: Int?,
     }
     return eps.first() to false
 }
+
+/** A rewatch that has not reached the end again leaves an episode or film marked as seen. */
+internal fun keepsSeen(wasFinished: Boolean?, nowFinished: Boolean): Boolean = wasFinished == true && !nowFinished

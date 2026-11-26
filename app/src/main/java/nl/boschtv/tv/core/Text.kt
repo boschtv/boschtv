@@ -22,17 +22,41 @@ object Tags {
     private val prefix = Regex("""^\s*([A-Z]{2,5})\s*(?:[|\-–•▎]\s|:\s*)""")
     private val suffix = Regex("""(?:\s[|┃\-–]\s*|\s[\[(])([A-Z]{2,5})[\])]?\s*$""")
     private val anyBar = Regex("""[┃|]\s*[^┃|]{1,14}?\s*[┃|]""")
+    // The loosest form, a code and a space: "NL Landman", "DE Landman", "MULTI Landman".
+    private val bare = Regex("""^\s*([A-Z]{2,5})\s+(?=\S)""")
+    private val lower = Regex("""\p{Ll}""")
+
+    /** A listing that carries several languages at once ("MULTI Landman"): a label, but no language. */
+    const val MULTI = "MULTI"
 
     /** Labels that are not a country at all (PPV, UCL, 4K…): treated as no label. */
-    private val notCountries = setOf("PPV", "UCL", "VIP", "VOD", "UHD", "4K", "8K", "HD", "FHD", "SD", "3D", "TOP", "NEW", "TV", "HEVC", "24/7", "LIVE")
+    private val notCountries = setOf("PPV", "UCL", "VIP", "VOD", "UHD", "4K", "8K", "HD", "FHD", "SD", "3D", "TOP", "NEW", "TV", "HEVC", "24/7", "LIVE", MULTI)
+
+    /**
+     * Codes that are also ordinary words at the start of a title ("IT Chapter Two", "US Marshals",
+     * "NO Time to Die"): only read as a label with a separator ("IT: …", "┃IT┃ …"), never bare.
+     * Longer codes are words too ("HOLLAND", "DUTCH", "HINDI"), so the bare form only takes two or three letters.
+     */
+    private val notBare = setOf("IT", "US", "IS", "NO", "IN", "ID", "MY", "AL", "BE", "CA", "BA", "SI", "AT", "AF", "KU", "PH", "AR", "ME")
+
+    /**
+     * A code and a space, read as a label only when that cannot be part of the title. The rest of the
+     * name must have small letters: "DE KAMPIOENEN" (all capitals) is a Dutch title, "DE Landman" is German.
+     */
+    private fun bareCode(name: String): String? {
+        val m = bare.find(name) ?: return null
+        val code = m.groupValues[1]
+        if (code == MULTI) return code
+        if (code.length > 3 || code in notBare || code !in Language.allCodes) return null
+        return code.takeIf { lower.containsMatchIn(name.substring(m.range.last + 1)) }
+    }
 
     /** Upper-cased label, or null when the name has none. */
     fun of(name: String): String? {
         (bar.find(name) ?: bracket.find(name))?.let { return it.groupValues[1].trim().uppercase() }
-        for (r in listOf(prefix, suffix)) {
-            val code = r.find(name)?.groupValues?.get(1)?.uppercase() ?: continue
-            if (code in Language.allCodes) return code
-        }
+        prefix.find(name)?.groupValues?.get(1)?.uppercase()?.let { if (it in Language.allCodes || it == MULTI) return it }
+        bareCode(name)?.let { return it }
+        suffix.find(name)?.groupValues?.get(1)?.uppercase()?.let { if (it in Language.allCodes || it == MULTI) return it }
         return null
     }
 
@@ -46,8 +70,11 @@ object Tags {
     fun strip(name: String): String {
         if (bar.containsMatchIn(name)) return anyBar.replace(name, " ").replace('┃', ' ').trim()
         var s = bracket.replace(name, "")
-        prefix.find(s)?.let { if (it.groupValues[1].uppercase() in Language.allCodes) s = s.removeRange(it.range) }
-        suffix.find(s)?.let { if (it.groupValues[1].uppercase() in Language.allCodes) s = s.removeRange(it.range) }
+        fun known(code: String) = code.uppercase().let { it in Language.allCodes || it == MULTI }
+        prefix.find(s)?.let { if (known(it.groupValues[1])) s = s.removeRange(it.range) }
+        // "MULTI NL Landman": strip every bare label in front, not just the first.
+        while (true) { val m = bare.find(s) ?: break; if (bareCode(s) == null) break; s = s.removeRange(m.range) }
+        suffix.find(s)?.let { if (known(it.groupValues[1])) s = s.removeRange(it.range) }
         return s.replace('┃', ' ').trim()
     }
 }
