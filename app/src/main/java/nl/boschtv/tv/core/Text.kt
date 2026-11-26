@@ -18,6 +18,9 @@ object Tags {
     // Explicit tag syntax: whatever sits between the bars or brackets is meant as a label.
     private val bar = Regex("""^\s*[┃|]\s*([^┃|]{1,14}?)\s*[┃|]""")
     private val bracket = Regex("""^\s*[\[(]\s*([A-Za-z]{2,5})\s*[\])]""")
+    // A code and then the heavy bar, with none in front: "NL┃ Landman", "CA FR┃ TVA". That bar is never
+    // part of a title, so whatever sits before it is meant as a label, just like "┃NL┃ Landman".
+    private val lead = Regex("""^\s*([^┃|\s][^┃|]{0,13}?)\s*┃\s*""")
     // Looser forms: only accepted when the code is a known language, so "FBI: Most Wanted" stays a title.
     private val prefix = Regex("""^\s*([A-Z]{2,5})\s*(?:[|\-–•▎]\s|:\s*)""")
     private val suffix = Regex("""(?:\s[|┃\-–]\s*|\s[\[(])([A-Z]{2,5})[\])]?\s*$""")
@@ -53,7 +56,7 @@ object Tags {
 
     /** Upper-cased label, or null when the name has none. */
     fun of(name: String): String? {
-        (bar.find(name) ?: bracket.find(name))?.let { return it.groupValues[1].trim().uppercase() }
+        (bar.find(name) ?: lead.find(name) ?: bracket.find(name))?.let { return it.groupValues[1].trim().uppercase() }
         prefix.find(name)?.groupValues?.get(1)?.uppercase()?.let { if (it in Language.allCodes || it == MULTI) return it }
         bareCode(name)?.let { return it }
         suffix.find(name)?.groupValues?.get(1)?.uppercase()?.let { if (it in Language.allCodes || it == MULTI) return it }
@@ -63,13 +66,16 @@ object Tags {
     /** The language a label stands for; [Language.OTHER] for an unknown country code, null for no label. */
     fun language(tag: String?): Language? = when {
         tag == null || tag in notCountries -> null
-        else -> Language.ofCode(tag) ?: if (tag.length <= 3 && tag.all { it.isLetter() }) Language.OTHER else null
+        // "FR-4K", "TR-3D": a language with a quality behind it.
+        else -> Language.ofCode(tag) ?: Language.ofCode(tag.substringBefore('-')) ?: Language.ofWords(tag) ?: if (tag.length <= 3 && tag.all { it.isLetter() }) Language.OTHER else null
     }
 
     /** Removes every tag marker from a name. */
     fun strip(name: String): String {
-        if (bar.containsMatchIn(name)) return anyBar.replace(name, " ").replace('┃', ' ').trim()
-        var s = bracket.replace(name, "")
+        // "NL┃ ┃NL┃ Cooper & Fry": a label in front of the barred one.
+        val n = lead.replace(name, "")
+        if (bar.containsMatchIn(n)) return anyBar.replace(n, " ").replace('┃', ' ').trim()
+        var s = bracket.replace(n, "")
         fun known(code: String) = code.uppercase().let { it in Language.allCodes || it == MULTI }
         prefix.find(s)?.let { if (known(it.groupValues[1])) s = s.removeRange(it.range) }
         // "MULTI NL Landman": strip every bare label in front, not just the first.
@@ -118,7 +124,8 @@ object Titles {
         s = spaces.replace(s, " ").trim()
         if (year == null) yearTail.find(s)?.let { year = it.groupValues[1].toIntOrNull(); s = s.removeRange(it.range) }
         s = s.trim(' ', '-', '–', ':', '|').trim()
-        return CleanTitle(s.ifBlank { Tags.strip(raw).ifBlank { raw.trim() } }, year, dubbed, quality)
+        // Nothing left ("NL┃ [REC]"): the name without its label, rather than nothing at all.
+        return CleanTitle(s.ifBlank { Tags.strip(raw).ifBlank { raw.substringAfterLast('┃').trim().ifBlank { raw.trim() } } }, year, dubbed, quality)
     }
 
     fun channel(raw: String): String =
