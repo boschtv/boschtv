@@ -20,7 +20,7 @@ object Tags {
     private val bracket = Regex("""^\s*[\[(]\s*([A-Za-z]{2,5})\s*[\])]""")
     // A code and then the heavy bar, with none in front: "NL┃ Landman", "CA FR┃ TVA". That bar is never
     // part of a title, so whatever sits before it is meant as a label, just like "┃NL┃ Landman".
-    private val lead = Regex("""^\s*([^┃|\s][^┃|]{0,13}?)\s*┃\s*""")
+    private val lead = Regex("""^\s*([^┃|\s\[(][^┃|]{0,13}?)\s*┃\s*""")
     // Looser forms: only accepted when the code is a known language, so "FBI: Most Wanted" stays a title.
     private val prefix = Regex("""^\s*([A-Z]{2,5})\s*(?:[|\-–•▎]\s|:\s*)""")
     private val suffix = Regex("""(?:\s[|┃\-–]\s*|\s[\[(])([A-Z]{2,5})[\])]?\s*$""")
@@ -72,11 +72,16 @@ object Tags {
 
     /** Removes every tag marker from a name. */
     fun strip(name: String): String {
-        // "NL┃ ┃NL┃ Cooper & Fry": a label in front of the barred one.
-        val n = lead.replace(name, "")
-        if (bar.containsMatchIn(n)) return anyBar.replace(n, " ").replace('┃', ' ').trim()
-        var s = bracket.replace(n, "")
         fun known(code: String) = code.uppercase().let { it in Language.allCodes || it == MULTI }
+        // Labels can come two at a time: "NL┃ ┃NL┃ Cooper & Fry", "NL┃ [NL] Landman", "[NL] ┃NL┃ Landman".
+        // After the first, only a language goes, so "NL┃ UFC ┃ WWE" keeps "UFC WWE".
+        var n = lead.replace(name, "")
+        while (true) {
+            val m = bracket.find(n) ?: lead.find(n)?.takeIf { known(it.groupValues[1].trim()) } ?: break
+            n = n.removeRange(m.range).trimStart()
+        }
+        if (bar.containsMatchIn(n)) return anyBar.replace(n, " ").replace('┃', ' ').trim()
+        var s = n
         prefix.find(s)?.let { if (known(it.groupValues[1])) s = s.removeRange(it.range) }
         // "MULTI NL Landman": strip every bare label in front, not just the first.
         while (true) { val m = bare.find(s) ?: break; if (bareCode(s) == null) break; s = s.removeRange(m.range) }
