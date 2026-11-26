@@ -23,6 +23,7 @@ object Playback {
     const val STREAM = "stream"
     const val CONTAINER = "container"
     const val RESTART = "restart"
+    const val LISTING = "listing"
     const val CHANNEL = "channel"
 
     /**
@@ -38,9 +39,11 @@ object Playback {
             .putExtra(TrailerActivity.NAME, name).putExtra(TrailerActivity.IMAGE, image))
     }
 
-    fun title(ctx: Context, key: String, episodeId: String? = null, streamId: Long? = null, container: String? = null, restart: Boolean = false) {
+    /** [listing]: a series played from another of its listings (a sharper one), for as long as the player is open. */
+    fun title(ctx: Context, key: String, episodeId: String? = null, streamId: Long? = null, container: String? = null, restart: Boolean = false, listing: Long? = null) {
         ctx.startActivity(Intent(ctx, PlayerActivity::class.java).apply {
             putExtra(KEY, key); putExtra(EPISODE, episodeId); putExtra(RESTART, restart)
+            if (listing != null) putExtra(LISTING, listing)
             if (streamId != null) { putExtra(STREAM, streamId); putExtra(CONTAINER, container) }
         })
     }

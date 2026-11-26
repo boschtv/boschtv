@@ -217,6 +217,8 @@ class PlayerActivity : ComponentActivity() {
     private var unproven = false
     private var noticeJob: kotlinx.coroutines.Job? = null
     private var toldSlow = false
+    /** The series listing chosen on the detail page (a sharper one); null plays the series' own. */
+    private var chosen: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -249,7 +251,7 @@ class PlayerActivity : ComponentActivity() {
                 val ep = episode
                 if (unproven && back != null && ep != null) {
                     unproven = false; previous = null
-                    copy?.let { triedCopies += it.id }
+                    copy?.let { triedCopies += it.id; if (it.listing == chosen) chosen = null }   // this TV cannot show it: not for the next episodes either
                     Playback.lighter.remove(seasonKey(ep))
                     copy = back.takeIf { it.id != ep.id }
                     ui.notice = null
@@ -309,6 +311,7 @@ class PlayerActivity : ComponentActivity() {
         val t = c.catalog.title(key) ?: return finish()
         title = t
         val restart = intent.getBooleanExtra(Playback.RESTART, false)
+        chosen = intent.getLongExtra(Playback.LISTING, 0).takeIf { it != 0L }
         if (t.kind == KIND_MOVIE) {
             val saved = c.library.progress(ContentIds.movie(t.key))
             // The version watched last time, as long as the provider still has it (another provider numbers them differently).
@@ -344,6 +347,15 @@ class PlayerActivity : ComponentActivity() {
             copies = runCatching { c.catalog.episodeCopies(ep) }.getOrNull()
             copy = copies?.firstOrNull { it.listing == listing && it.id != ep.id }
             if (copy != null) { previous = nl.boschtv.tv.core.EpisodeCopy(0, ep.id, ep.container, 0); unproven = true }
+        }
+        // The sharper listing chosen on the detail page, also for the episodes after this one. When it does not
+        // have this episode, the series' own file plays and the viewer is told.
+        val pick = chosen
+        if (copy == null && pick != null) {
+            copies = runCatching { c.catalog.episodeCopies(ep) }.getOrNull()
+            copy = copies?.firstOrNull { it.listing == pick && it.id != ep.id }
+            if (copy != null) { previous = nl.boschtv.tv.core.EpisodeCopy(0, ep.id, ep.container, 0); unproven = true }
+            else notice(Texts.get(R.string.choice_missing))
         }
         start(c.prefs.source().episode(copy?.id ?: ep.id, copy?.let { it.container } ?: ep.container), positionMs)
     }

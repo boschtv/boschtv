@@ -126,6 +126,7 @@
     <string name="phone_paste">Sağlayıcınızın bağlantısını oraya yapıştırın. Telefonunuz aynı Wi-Fi ağında olmalıdır.\n%1$s</string>
     <string name="play_failed">Bu oynatılamıyor. Bağlantınızı kontrol edin veya başka bir sürüm deneyin.</string>
     <string name="lighter_copy">Daha hafif sürüm</string>
+    <string name="choice_missing">Bu bölüm o kalitede yok: normal olanı oynatılıyor</string>
     <string name="slow_provider">Sağlayıcı yavaş</string>
     <string name="episode_line">S%1$d · B%2$d · %3$s</string>
     <string name="track_n">Parça %1$d</string>

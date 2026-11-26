@@ -53,8 +53,12 @@ private class Candidate(
     var dubbed: Boolean, var quality: String?, var plot: String?, var backdrop: String?,
     /** Its category or its own name says which language it is for (a "MULTI" listing says nothing). */
     var labelled: Boolean = true,
+    /** The language exactly: Flemish and Dutch both count as [lang] 0, but are not the same listing. */
+    var exact: Lang = Lang.HOME,
 ) {
     val alts = LinkedHashMap<String, String>()   // label -> "id;ext;label"
+    /** A series' other listings, with what they are; turned into [alts] once every listing has been seen. */
+    val copies = ArrayList<Listing>()
     // Lowest wins, in this order: the viewer's language before English; a listing made for that language
     // before one that names none ("MULTI" carries every dub at once, is several times heavier and its
     // subtitles are a guess), whatever its quality; then undubbed before dubbed; then plain before 4K/HEVC.
@@ -65,6 +69,27 @@ private class Candidate(
 /** Which of a title's listings is shown and played; lowest wins. [lang]: 0 home language, 1 English. */
 internal fun listingScore(lang: Int, labelled: Boolean, dubbed: Boolean, quality: String?): Int =
     lang * 100 + (if (labelled) 0 else 50) + (if (dubbed) 10 else 0) + (if (quality != null) 4 else 0)
+
+/** What a listing of a series is to the one that plays: [lang] is the exact language, [quality] null for plain. */
+internal data class Listing(val id: Long, val lang: Lang, val labelled: Boolean, val quality: String?)
+
+/**
+ * The alts lines of a series: a listing in exactly the same language that is sharper ("4K", "Dolby Vision")
+ * is offered as a choice, labelled with its quality; every other listing is a [COPY] the player may fall
+ * back on when an episode arrives too slowly. A MULTI listing or one in another language is never a choice.
+ */
+internal fun seriesAlts(main: Listing, others: List<Listing>, max: Int): List<String> {
+    val sharper = setOf("Dolby Vision", "4K")
+    val choices = if (!main.labelled) emptyList() else others
+        .filter { it.labelled && it.lang == main.lang && it.quality in sharper && it.quality != main.quality }
+        .sortedBy { if (it.quality == "Dolby Vision") 0 else 1 }
+        .distinctBy { it.quality }
+        .filter { it.id != main.id }
+    val rest = others.filter { it !in choices && it.id != main.id }.distinctBy { it.id }
+    return choices.map { "${it.id};;${it.quality}" } + rest.take((max - choices.size).coerceAtLeast(0)).map { "${it.id};;$COPY" }
+}
+
+private fun Candidate.listing() = Listing(sourceId, exact, labelled, quality)
 
 class SyncManager(
     private val db: AppDatabase,
@@ -179,6 +204,8 @@ class SyncManager(
         val out = LinkedHashMap<String, Candidate>(8192)
         val topCounters = HashMap<String, Int>()
         val prefix = if (kind == KIND_MOVIE) "m" else "s"
+        // "NL┃ 4K SERIES": what the category says about quality counts when the name itself says nothing.
+        val catQuality = HashMap<String, String?>()
         client.forEach(src, action) { o ->
             val catId = o.str("category_id") ?: return@forEach
             val cat = cats[catId] ?: return@forEach
@@ -225,9 +252,10 @@ class SyncManager(
                 lang = if (catLang == Lang.EN) 1 else 0,
                 genres = cat.genres or Genre.mask(o.str("genre")),
                 services = cat.services, flags = cat.flags and Flags.TOP.inv(), topRank = topRank,
-                dubbed = clean.dubbed && kind == KIND_MOVIE, quality = clean.quality,
+                dubbed = clean.dubbed && kind == KIND_MOVIE,
+                quality = clean.quality ?: catQuality.getOrPut(catId) { Titles.clean(cat.label).quality },
                 plot = o.str("plot")?.take(700), backdrop = o.firstString("backdrop_path"),
-                labelled = labelled,
+                labelled = labelled, exact = catLang,
             )
             val existing = out[key]
             if (existing == null) out[key] = cand else merge(existing, cand)
@@ -244,8 +272,9 @@ class SyncManager(
         fun alt(c: Candidate) {
             if (c.kind != KIND_MOVIE) {
                 // Another listing of the same series has its own files, often on another server: the player
-                // falls back on those when an episode of the preferred listing arrives too slowly.
-                if (a.alts.size < MAX_COPIES) a.alts.getOrPut("$COPY${c.sourceId}") { "${c.sourceId};;$COPY" }
+                // falls back on those when an episode of the preferred listing arrives too slowly, and a
+                // sharper one in the same language can be chosen. Which is which is settled in [store].
+                if (a.copies.size < 3 * MAX_COPIES) a.copies += c.listing()   // a snapshot: [a] itself is overwritten below
                 return
             }
             if (c.lang > primaryLang) {
@@ -260,7 +289,7 @@ class SyncManager(
         if (b.score < a.score) {
             alt(a)
             a.sourceId = b.sourceId; a.container = b.container; a.name = b.name
-            a.lang = b.lang; a.dubbed = b.dubbed; a.quality = b.quality; a.labelled = b.labelled
+            a.lang = b.lang; a.dubbed = b.dubbed; a.quality = b.quality; a.labelled = b.labelled; a.exact = b.exact
             a.poster = b.poster ?: a.poster
         } else {
             alt(b)
@@ -283,7 +312,9 @@ class SyncManager(
                 year = c.year, poster = c.poster, container = c.container, addedTs = c.addedTs, rating = c.rating,
                 lang = c.lang, pGenres = c.genres, services = c.services,
                 flags = c.flags or (if (c.topRank > 0) Flags.TOP else 0), topRank = c.topRank,
-                alts = c.alts.values.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+                alts = (if (c.kind == KIND_MOVIE) c.alts.values.toList()
+                    else seriesAlts(c.listing(), c.copies, MAX_COPIES))
+                    .takeIf { it.isNotEmpty() }?.joinToString("\n"),
                 pPlot = c.plot, pBackdrop = c.backdrop, gen = gen,
             )
         }.chunked(400).forEach { chunk ->
