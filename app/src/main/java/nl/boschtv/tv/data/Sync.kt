@@ -55,12 +55,16 @@ private class Candidate(
     var labelled: Boolean = true,
 ) {
     val alts = LinkedHashMap<String, String>()   // label -> "id;ext;label"
-    // Lowest wins. Among otherwise equal listings, the one made for the viewer's language goes before one
-    // that names no language: a "MULTI" copy carries every dub at once, which makes it several times
-    // heavier for the same picture, and its subtitles are a guess.
-    val score get() = lang * 100 + (if (dubbed) 10 else 0) + (if (quality != null) 4 else 0) + (if (labelled) 0 else 2)
+    // Lowest wins, in this order: the viewer's language before English; a listing made for that language
+    // before one that names none ("MULTI" carries every dub at once, is several times heavier and its
+    // subtitles are a guess), whatever its quality; then undubbed before dubbed; then plain before 4K/HEVC.
+    val score get() = listingScore(lang, labelled, dubbed, quality)
     val altLabel get() = when { dubbed -> "dub"; else -> quality }
 }
+
+/** Which of a title's listings is shown and played; lowest wins. [lang]: 0 home language, 1 English. */
+internal fun listingScore(lang: Int, labelled: Boolean, dubbed: Boolean, quality: String?): Int =
+    lang * 100 + (if (labelled) 0 else 50) + (if (dubbed) 10 else 0) + (if (quality != null) 4 else 0)
 
 class SyncManager(
     private val db: AppDatabase,
@@ -179,9 +183,11 @@ class SyncManager(
             val catId = o.str("category_id") ?: return@forEach
             val cat = cats[catId] ?: return@forEach
             var catLang = cat.lang ?: return@forEach
-            var labelled = cat.labelled
-            // The category says nothing about language: the title's own label decides ("NL: Dune", "DE: Dune").
-            if (!cat.labelled) Tags.language(Tags.of(o.str("name").orEmpty()))?.let { l ->
+            val tag = Tags.of(o.str("name").orEmpty())
+            // "MULTI Landman" names no language of its own, even inside a Dutch category.
+            var labelled = cat.labelled && tag != Tags.MULTI
+            // The category says nothing about language: the title's own label decides ("NL: Dune", "DE Dune").
+            if (!cat.labelled) Tags.language(tag)?.let { l ->
                 val rel = content.relate(l)
                 if (!content.wants(rel, live = false)) return@forEach
                 catLang = rel

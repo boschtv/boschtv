@@ -99,6 +99,28 @@ class CoreTest {
         assertNull(Tags.of("FBI: Most Wanted"))
         assertNull(Tags.of("TV-Series"))
         assertEquals("Most Wanted", Titles.clean("NL: Most Wanted").name)
+        // A code and a space, the way some providers write their titles.
+        assertEquals("NL", Tags.of("NL Landman"))
+        assertEquals(Language.GERMAN, Tags.language(Tags.of("DE Landman")))
+        assertEquals("Landman", Titles.clean("NL Landman").name)
+        assertEquals("Landman", Titles.clean("DE Landman (2024)").name)
+        assertEquals("EN", Tags.of("EN The Rings of Power"))
+        // "MULTI" is a label without a language, and never part of the name.
+        assertEquals(Tags.MULTI, Tags.of("MULTI Landman"))
+        assertNull(Tags.language(Tags.of("MULTI Landman")))
+        assertNull(Tags.language(Tags.of("┃MULTI┃ Landman")))
+        assertEquals("Landman", Titles.clean("MULTI Landman").name)
+        assertEquals("The Lord of the Rings: The Rings of Power", Titles.clean("MULTI The Lord of the Rings: The Rings of Power").name)
+        assertEquals("Landman", Titles.clean("MULTI NL Landman").name)
+        // Titles that only look like a code and a space stay as they are.
+        assertNull(Tags.of("IT Chapter Two"))
+        assertEquals("IT Chapter Two", Titles.clean("IT Chapter Two").name)
+        assertNull(Tags.of("US Marshals"))
+        assertNull(Tags.of("DE KAMPIOENEN"))
+        assertEquals("DE KAMPIOENEN", Titles.clean("DE KAMPIOENEN").name)
+        assertEquals("De Luizenmoeder", Titles.clean("De Luizenmoeder").name)
+        assertNull(Tags.of("UFO Sightings"))
+        assertNull(Tags.of("NL"))
         // Languages named in words.
         assertEquals(Lang.HOME, Categories.classify("Dutch Movies", false, prefs).lang)
         assertEquals(Lang.HOME, Categories.classify("Nederlandse films", false, prefs).lang)

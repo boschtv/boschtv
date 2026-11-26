@@ -5,6 +5,8 @@ import nl.boschtv.tv.data.db.ContentIds
 import nl.boschtv.tv.data.db.EpisodeEntity
 import nl.boschtv.tv.data.db.FavoriteEntity
 import nl.boschtv.tv.core.Titles
+import nl.boschtv.tv.data.keepsSeen
+import nl.boschtv.tv.data.listingScore
 import nl.boschtv.tv.data.matchFavorites
 import nl.boschtv.tv.data.resumeEpisode
 import org.junit.Assert.assertFalse
@@ -21,6 +23,25 @@ class UserDataTest {
 
     private fun channel(id: Long, name: String, epg: String?, sort: Int) =
         ChannelEntity(id = id, name = name, search = name.lowercase(), logo = null, groupId = "g", epgId = epg, num = sort, sort = sort, archive = false, gen = 0)
+
+    @Test fun rewatchingKeepsTheCheckmark() {
+        assertTrue(keepsSeen(wasFinished = true, nowFinished = false))    // seen, started again: stays seen
+        assertFalse(keepsSeen(wasFinished = true, nowFinished = true))
+        assertFalse(keepsSeen(wasFinished = false, nowFinished = false))  // ordinary progress is saved
+        assertFalse(keepsSeen(wasFinished = null, nowFinished = false))
+    }
+
+    /** The Dutch listing is what plays; MULTI and English only when there is no Dutch one. */
+    @Test fun dutchListingComesFirst() {
+        val nl = listingScore(lang = 0, labelled = true, dubbed = false, quality = null)
+        val nl4k = listingScore(lang = 0, labelled = true, dubbed = false, quality = "4K")
+        val multi = listingScore(lang = 0, labelled = false, dubbed = false, quality = null)
+        val en = listingScore(lang = 1, labelled = true, dubbed = false, quality = null)
+        assertTrue(nl < nl4k)
+        assertTrue("a Dutch 4K listing beats a MULTI one", nl4k < multi)
+        assertTrue(multi < en)
+        assertTrue(listingScore(0, true, true, "4K") < multi)
+    }
 
     @Test fun sameEpisodeOnAnotherProviderHasTheSameId() {
         // Two providers, two ids of their own for season 1 episode 3.
